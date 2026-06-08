@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NumPy & PyTorch Basics</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #161616;
+    --surface2: #1e1e1e;
+    --border: #2a2a2a;
+    --border2: #333;
+    --text: #e8e8e6;
+    --muted: #888;
+    --dim: #555;
+    --np: #4ade80;
+    --np-bg: rgba(74,222,128,0.08);
+    --np-border: rgba(74,222,128,0.2);
+    --pt: #60a5fa;
+    --pt-bg: rgba(96,165,250,0.08);
+    --pt-border: rgba(96,165,250,0.2);
+    --accent: #f59e0b;
+    --accent-bg: rgba(245,158,11,0.08);
+    --red: #f87171;
+    --font: 'IBM Plex Sans', sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.6; }
+
+  .layout { display: grid; grid-template-columns: 260px 1fr; height: 100vh; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-header { padding: 20px 16px 14px; border-bottom: 1px solid var(--border); }
+  .sidebar-header h1 { font-size: 12px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .sidebar-header p { font-size: 13px; color: var(--text); margin-top: 3px; font-weight: 300; }
+
+  .tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .tab { flex: 1; padding: 9px 0; font-size: 12px; font-weight: 500; text-align: center; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all .15s; letter-spacing: .04em; }
+  .tab.active.np-tab { color: var(--np); border-bottom-color: var(--np); }
+  .tab.active.pt-tab { color: var(--pt); border-bottom-color: var(--pt); }
+  .tab:hover { color: var(--text); }
+
+  .topic-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .topic-list::-webkit-scrollbar { width: 3px; }
+  .topic-list::-webkit-scrollbar-track { background: transparent; }
+  .topic-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .topic-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 2px; transition: background .1s; display: flex; align-items: center; justify-content: space-between; }
+  .topic-item:hover { background: var(--surface2); }
+  .topic-item.active { background: var(--surface2); }
+  .topic-item.active.np { border-left: 2px solid var(--np); padding-left: 8px; }
+  .topic-item.active.pt { border-left: 2px solid var(--pt); padding-left: 8px; }
+  .topic-name { font-size: 13px; color: var(--text); font-weight: 400; }
+  .topic-progress { font-size: 11px; color: var(--dim); font-family: var(--mono); }
+
+  .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .overall-progress { margin-bottom: 6px; }
+  .prog-bar { height: 3px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+  .prog-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+  .prog-fill.np { background: var(--np); }
+  .prog-fill.pt { background: var(--pt); }
+  .prog-label { font-size: 11px; color: var(--dim); margin-bottom: 5px; font-family: var(--mono); }
+
+  /* Main panel */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+  .main-header { padding: 20px 28px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .topic-title { font-size: 18px; font-weight: 500; color: var(--text); }
+  .topic-subtitle { font-size: 12px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+
+  .main-body { flex: 1; overflow-y: auto; padding: 24px 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-content: start; }
+  .main-body::-webkit-scrollbar { width: 3px; }
+  .main-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .card.full-width { grid-column: 1 / -1; }
+  .card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .card-title { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .card-body { padding: 14px 16px; }
+
+  /* Functions list */
+  .fn-grid { display: flex; flex-direction: column; gap: 6px; }
+  .fn-row { display: flex; align-items: baseline; gap: 8px; }
+  .fn-code { font-family: var(--mono); font-size: 12px; color: var(--accent); white-space: nowrap; }
+  .fn-desc { font-size: 12px; color: var(--muted); }
+
+  /* Assignments */
+  .assign-list { display: flex; flex-direction: column; gap: 5px; }
+  .assign-item { display: flex; align-items: flex-start; gap: 9px; padding: 8px 10px; border-radius: 5px; border: 1px solid var(--border); cursor: pointer; transition: border-color .1s; }
+  .assign-item:hover { border-color: var(--border2); }
+  .assign-item.done { opacity: .45; }
+  .assign-item.done .assign-text { text-decoration: line-through; }
+  .assign-cb { width: 15px; height: 15px; border: 1.5px solid var(--dim); border-radius: 3px; flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center; transition: all .12s; }
+  .assign-item.done .assign-cb { background: var(--muted); border-color: var(--muted); }
+  .check { display: none; }
+  .assign-item.done .check { display: block; }
+  .assign-text { font-size: 13px; color: var(--text); }
+  .assign-hint { font-size: 11px; color: var(--dim); font-family: var(--mono); margin-top: 2px; }
+  .star { color: var(--accent); margin-left: 4px; font-size: 11px; }
+
+  /* AI Drill Panel */
+  .drill-panel { grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .drill-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .drill-btn { font-family: var(--mono); font-size: 11px; padding: 5px 12px; border-radius: 4px; border: 1px solid; cursor: pointer; transition: all .15s; font-weight: 500; letter-spacing: .04em; }
+  .drill-btn.np-btn { color: var(--np); border-color: var(--np-border); background: var(--np-bg); }
+  .drill-btn.np-btn:hover { background: rgba(74,222,128,0.15); }
+  .drill-btn.pt-btn { color: var(--pt); border-color: var(--pt-border); background: var(--pt-bg); }
+  .drill-btn.pt-btn:hover { background: rgba(96,165,250,0.15); }
+  .drill-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .drill-body { padding: 16px; min-height: 120px; }
+  .drill-placeholder { color: var(--dim); font-size: 13px; font-style: italic; }
+  .drill-content { font-size: 13px; line-height: 1.7; color: var(--text); }
+  .drill-content code { font-family: var(--mono); font-size: 12px; color: var(--accent); background: var(--surface2); padding: 1px 5px; border-radius: 3px; }
+  .drill-content pre { font-family: var(--mono); font-size: 12px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 5px; padding: 12px 14px; margin: 10px 0; overflow-x: auto; color: var(--text); line-height: 1.6; white-space: pre-wrap; }
+  .drill-content .section-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 14px 0 6px; }
+  .loading-dot { display: inline-block; animation: blink 1.2s infinite; }
+  .loading-dot:nth-child(2) { animation-delay: .2s; }
+  .loading-dot:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%,100%{opacity:.2} 50%{opacity:1} }
+
+  /* Empty state */
+  .empty-state { grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center; color: var(--dim); }
+  .empty-state h2 { font-size: 15px; color: var(--muted); font-weight: 400; margin-bottom: 6px; }
+  .empty-state p { font-size: 12px; }
+
+  /* Scrollbar for main */
+  .main-body::-webkit-scrollbar { width: 4px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Interview Prep</h1>
+      <p>NumPy &amp; PyTorch Basics</p>
+    </div>
+    <div class="tabs">
+      <div class="tab np-tab active" id="tab-np" onclick="switchLib('np')">NumPy</div>
+      <div class="tab pt-tab" id="tab-pt" onclick="switchLib('pt')">PyTorch</div>
+    </div>
+    <div class="topic-list" id="topic-list"></div>
+    <div class="sidebar-footer">
+      <div class="prog-label" id="footer-label">0 / 0 done</div>
+      <div class="prog-bar"><div class="prog-fill np" id="footer-bar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- Main panel -->
+  <div class="main">
+    <div class="main-header">
+      <div class="topic-title" id="main-title">Select a topic</div>
+      <div class="topic-subtitle" id="main-sub">← pick from the list</div>
+    </div>
+    <div class="main-body" id="main-body">
+      <div class="empty-state">
+        <h2>Nothing selected</h2>
+        <p>Choose a topic from the sidebar to see ops, assignments, and generate a drill problem.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOPICS = {
+  np: [
+    {
+      id: 'np-create', name: 'Array Creation',
+      sub: 'Building arrays from scratch',
+      fns: [
+        {c:'np.array([1,2,3])', d:'from Python list'},
+        {c:'np.zeros((3,4))', d:'zero-filled array'},
+        {c:'np.ones((2,3))', d:'one-filled array'},
+        {c:'np.eye(4)', d:'identity matrix'},
+        {c:'np.full((3,3), 7)', d:'fill with constant'},
+        {c:'np.arange(0,10,2)', d:'range with step'},
+        {c:'np.linspace(0,1,50)', d:'evenly spaced in interval'},
+        {c:'np.random.randn(3,4)', d:'standard normal'},
+        {c:'np.random.rand(3,4)', d:'uniform [0,1)'},
+        {c:'np.random.randint(0,10,(3,4))', d:'random integers'},
+        {c:'np.zeros_like(x)', d:'zeros matching shape of x'},
+        {c:'np.ones_like(x)', d:'ones matching shape of x'},
+      ],
+      assigns: [
+        {t:'Create a 4×4 identity matrix, then a 3×5 matrix of all 7s', h:'eye, full'},
+        {t:'Generate 100 samples from N(0,1), check mean ≈ 0', h:'randn, .mean()'},
+        {t:'Create a range 0→1 with exactly 11 points', h:'linspace'},
+        {t:'Build a 3D array of shape (2,3,4) filled with zeros', h:'zeros — check .ndim'},
+      ]
+    },
+    {
+      id: 'np-attrs', name: 'Array Attributes',
+      sub: 'Inspecting array metadata',
+      fns: [
+        {c:'x.shape', d:'tuple of dimensions'},
+        {c:'x.dtype', d:'data type (float64, int32...)'},
+        {c:'x.ndim', d:'number of dimensions'},
+        {c:'x.size', d:'total number of elements'},
+        {c:'x.T', d:'transpose (2D shorthand)'},
+        {c:'x.astype(np.float32)', d:'cast to new dtype'},
+        {c:'x.copy()', d:'deep copy — avoid aliasing bugs'},
+        {c:'x.flatten()', d:'1D copy of all elements'},
+        {c:'x.ravel()', d:'1D view (no copy if possible)'},
+      ],
+      assigns: [
+        {t:'Create (3,4,5) array, print shape/ndim/size without running', h:'manually compute: 3×4×5=60'},
+        {t:'Create float64 array, cast to float32, compare dtypes', h:'astype'},
+        {t:'Show that x.ravel() shares memory but x.flatten() does not', h:'np.shares_memory()'},
+        {t:'Predict x.T.shape for x.shape=(2,3,4) — then verify', h:'transpose reverses axis order'},
+      ]
+    },
+    {
+      id: 'np-index', name: 'Indexing & Slicing',
+      sub: 'Accessing and filtering elements',
+      fns: [
+        {c:'x[0], x[-1]', d:'first, last element'},
+        {c:'x[1:4], x[::2]', d:'slice, stride'},
+        {c:'x[1:3, 2:5]', d:'2D slice'},
+        {c:'x[:, 0]', d:'entire first column'},
+        {c:'x[x > 0]', d:'boolean mask → 1D array'},
+        {c:'x[np.array([0,2,4])]', d:'fancy indexing'},
+        {c:'np.where(x > 0, x, 0)', d:'conditional element select'},
+        {c:'x[np.newaxis, :]', d:'add axis via indexing'},
+      ],
+      assigns: [
+        {t:'Extract every other row from a (6,4) matrix', h:'x[::2, :]'},
+        {t:'Zero out all negative values in a random matrix in-place', h:'x[x < 0] = 0'},
+        {t:'From a (5,5) matrix, extract the 3×3 center submatrix', h:'x[1:4, 1:4]'},
+        {t:'Fancy index: extract rows 0, 2, 4 from a (6,3) matrix', h:'x[[0,2,4], :]', star:true},
+        {t:'Replace all values > 0.5 with 1, rest with 0 using np.where', h:'np.where(cond, 1, 0)'},
+      ]
+    },
+    {
+      id: 'np-reshape', name: 'Reshaping & Axes',
+      sub: 'Changing shape without changing data',
+      fns: [
+        {c:'x.reshape(3,4)', d:'new shape, same data'},
+        {c:'x.reshape(-1, 4)', d:'-1 infers dimension'},
+        {c:'x.reshape(-1)', d:'flatten to 1D'},
+        {c:'np.expand_dims(x, axis=0)', d:'insert new axis'},
+        {c:'x[:, np.newaxis]', d:'add axis via indexing'},
+        {c:'np.squeeze(x)', d:'remove size-1 axes'},
+        {c:'x.transpose(1, 0, 2)', d:'reorder axes explicitly'},
+        {c:'np.swapaxes(x, 0, 1)', d:'swap two axes'},
+      ],
+      assigns: [
+        {t:'Reshape (24,) → (2,3,4) and back to (24,) without copy', h:'reshape, -1'},
+        {t:'Add a batch dim to (3,4) array to get (1,3,4)', h:'expand_dims or [np.newaxis]', star:true},
+        {t:'Given (B,T,D), transpose to (T,B,D)', h:'transpose(1,0,2)'},
+        {t:'Remove all size-1 dims from (1,4,1,3)', h:'squeeze → should give (4,3)'},
+      ]
+    },
+    {
+      id: 'np-broadcast', name: 'Broadcasting',
+      sub: 'Implicit shape expansion rules',
+      fns: [
+        {c:'(3,1) + (1,4) → (3,4)', d:'both dims expand'},
+        {c:'(5,3) * (3,)', d:'1D aligns from right'},
+        {c:'(1,4) - (3,4)', d:'first dim of left expands'},
+        {c:'scalar + array', d:'scalar treated as (1,)'},
+      ],
+      assigns: [
+        {t:'Add column vector (5,1) to row vector (1,3) — predict output shape before running', h:'→ (5,3)', star:true},
+        {t:'Subtract per-feature mean from (100,10) matrix in one line', h:'mean(axis=0, keepdims=True)'},
+        {t:'Compute outer product of two 1D arrays using broadcasting', h:'a[:,np.newaxis] * b[np.newaxis,:]'},
+        {t:'Why does (3,4) + (4,3) fail? Fix it.', h:'shapes must align from right — transpose one'},
+      ]
+    },
+    {
+      id: 'np-math', name: 'Math Operations',
+      sub: 'Element-wise and scalar ops',
+      fns: [
+        {c:'x + y, x - y, x * y, x / y', d:'element-wise arithmetic'},
+        {c:'x ** 2, np.sqrt(x)', d:'power and root'},
+        {c:'np.exp(x)', d:'eˣ element-wise'},
+        {c:'np.log(x)', d:'natural log'},
+        {c:'np.abs(x)', d:'absolute value'},
+        {c:'np.clip(x, 0, 1)', d:'clamp values to range'},
+        {c:'np.maximum(x, 0)', d:'element-wise max with scalar'},
+        {c:'np.sign(x)', d:'-1, 0, or +1'},
+      ],
+      assigns: [
+        {t:'Implement sigmoid(x) = 1/(1+exp(-x)) using numpy only', h:'np.exp'},
+        {t:'Implement numerically stable log(sum(exp(x)))', h:'subtract max first, then add it back', star:true},
+        {t:'ReLU: zero out negatives, keep positives — one line', h:'np.maximum(0, x)'},
+        {t:'Normalize a vector to unit norm', h:'x / np.linalg.norm(x)'},
+      ]
+    },
+    {
+      id: 'np-agg', name: 'Aggregations',
+      sub: 'Reducing arrays along axes',
+      fns: [
+        {c:'x.sum(), x.sum(axis=0)', d:'sum all or along axis'},
+        {c:'x.mean(axis=-1, keepdims=True)', d:'mean, keep dims for broadcast'},
+        {c:'x.std(axis=0)', d:'standard deviation'},
+        {c:'x.min(), x.max()', d:'global min/max'},
+        {c:'x.argmin(), x.argmax()', d:'index of min/max'},
+        {c:'np.cumsum(x, axis=0)', d:'cumulative sum'},
+        {c:'np.any(x > 0)', d:'any element satisfies?'},
+        {c:'np.all(x > 0)', d:'all elements satisfy?'},
+      ],
+      assigns: [
+        {t:'Compute column-wise mean of (100,10) matrix, result shape (1,10)', h:'keepdims=True'},
+        {t:'Find which row in (5,4) matrix has the highest sum', h:'sum(axis=1).argmax()'},
+        {t:'Normalize each row to sum to 1', h:'x / x.sum(axis=1, keepdims=True)', star:true},
+        {t:'Check if any row of a matrix contains only zeros', h:'~x.any(axis=1)'},
+      ]
+    },
+    {
+      id: 'np-linalg', name: 'Linear Algebra',
+      sub: 'Matrix and vector operations',
+      fns: [
+        {c:'np.dot(a, b)', d:'dot product or matmul'},
+        {c:'a @ b', d:'matrix multiply (≥1D)'},
+        {c:'np.matmul(a, b)', d:'batch-safe matmul'},
+        {c:'np.outer(a, b)', d:'outer product → (m,n)'},
+        {c:'np.linalg.norm(x)', d:'L2 norm'},
+        {c:'np.linalg.norm(x, axis=1)', d:'row-wise norms'},
+        {c:'np.linalg.inv(A)', d:'matrix inverse'},
+        {c:'np.linalg.det(A)', d:'determinant'},
+        {c:'np.trace(A)', d:'sum of diagonal'},
+      ],
+      assigns: [
+        {t:'Matrix multiply (3,4) @ (4,5) — verify output shape', h:'→ (3,5)'},
+        {t:'Compute pairwise L2 distances between 5 vectors of dim 8', h:'broadcasting or linalg.norm', star:true},
+        {t:'Compute outer product of [1,2,3] and [4,5] without np.outer', h:'a[:,np.newaxis] * b[np.newaxis,:]'},
+        {t:'Normalize rows of a matrix to unit L2 norm', h:'x / norm(x, axis=1, keepdims=True)'},
+      ]
+    },
+    {
+      id: 'np-combine', name: 'Combining Arrays',
+      sub: 'Stack, concat, split',
+      fns: [
+        {c:'np.concatenate([a,b], axis=0)', d:'join along existing axis'},
+        {c:'np.stack([a,b], axis=0)', d:'new axis at position'},
+        {c:'np.vstack([a,b])', d:'vertical stack (axis=0)'},
+        {c:'np.hstack([a,b])', d:'horizontal stack (axis=1)'},
+        {c:'np.split(x, 3, axis=0)', d:'split into 3 equal parts'},
+        {c:'np.tile(x, (2,3))', d:'repeat array'},
+        {c:'np.repeat(x, 3, axis=0)', d:'repeat elements'},
+      ],
+      assigns: [
+        {t:'Stack 5 arrays of shape (3,4) into (5,3,4)', h:'np.stack(arrays, axis=0)', star:true},
+        {t:'Concatenate (4,3) and (4,5) along axis=1', h:'→ (4,8)'},
+        {t:'Difference: stack vs concatenate on two (3,4) arrays along axis=0', h:'stack→(2,3,4) cat→(6,4)'},
+        {t:'Split a (12,4) matrix into 3 equal parts', h:'split(x, 3, axis=0)'},
+      ]
+    },
+  ],
+  pt: [
+    {
+      id: 'pt-create', name: 'Tensor Creation',
+      sub: 'Building tensors from scratch',
+      fns: [
+        {c:'torch.tensor([1,2,3])', d:'from Python list'},
+        {c:'torch.zeros(3,4)', d:'zero-filled tensor'},
+        {c:'torch.ones(2,3)', d:'one-filled tensor'},
+        {c:'torch.eye(4)', d:'identity matrix'},
+        {c:'torch.full((3,3), 7.0)', d:'fill with constant'},
+        {c:'torch.arange(0,10,2)', d:'range with step'},
+        {c:'torch.linspace(0,1,50)', d:'evenly spaced'},
+        {c:'torch.randn(3,4)', d:'standard normal'},
+        {c:'torch.rand(3,4)', d:'uniform [0,1)'},
+        {c:'torch.randint(0,10,(3,4))', d:'random integers'},
+        {c:'torch.zeros_like(x)', d:'zeros matching x'},
+        {c:'torch.from_numpy(arr)', d:'NumPy → Tensor (shares memory)'},
+        {c:'tensor.numpy()', d:'Tensor → NumPy (CPU only)'},
+      ],
+      assigns: [
+        {t:'Create tensor from list, check dtype — is it float or long?', h:'integers → LongTensor by default'},
+        {t:'Create float32 zeros of shape (2,3,4)', h:'torch.zeros(2,3,4, dtype=torch.float32)'},
+        {t:'Convert a NumPy array to tensor, modify tensor, verify NumPy changes', h:'shared memory via from_numpy', star:true},
+        {t:'Create range 0→9, reshape to (3,3)', h:'arange + view/reshape'},
+      ]
+    },
+    {
+      id: 'pt-attrs', name: 'Tensor Attributes',
+      sub: 'Inspecting tensor metadata',
+      fns: [
+        {c:'x.shape', d:'torch.Size([...])'},
+        {c:'x.dtype', d:'torch.float32, torch.long...'},
+        {c:'x.device', d:'cpu or cuda:0'},
+        {c:'x.requires_grad', d:'True if tracked for autograd'},
+        {c:'x.ndim', d:'number of dimensions'},
+        {c:'x.numel()', d:'total number of elements'},
+        {c:'x.is_contiguous()', d:'whether memory is contiguous'},
+        {c:'x.float()', d:'cast to float32'},
+        {c:'x.long()', d:'cast to int64'},
+        {c:'x.bool()', d:'cast to bool'},
+        {c:'x.to(torch.float16)', d:'explicit dtype cast'},
+      ],
+      assigns: [
+        {t:'Create int tensor, cast to float32, verify dtype changes', h:'.float() or .to(torch.float32)'},
+        {t:'Check if x.T is contiguous, call .contiguous() if not', h:'needed before .view()'},
+        {t:'Count elements in (2,3,4,5) tensor without multiplying manually', h:'.numel()'},
+        {t:'Why does requires_grad matter for inference? Show with torch.no_grad()', h:'no grad tracking = faster + less memory', star:true},
+      ]
+    },
+    {
+      id: 'pt-index', name: 'Indexing & Slicing',
+      sub: 'Same as NumPy, with gotchas',
+      fns: [
+        {c:'x[0], x[-1]', d:'first/last — same as NumPy'},
+        {c:'x[1:3, :, 2]', d:'multi-dim slice'},
+        {c:'x[x > 0]', d:'boolean mask → 1D'},
+        {c:'x[[0,2,4]]', d:'fancy indexing'},
+        {c:'torch.where(cond, a, b)', d:'conditional select'},
+        {c:'x.index_select(dim, idx)', d:'select by index tensor'},
+        {c:'x.masked_fill(mask, value)', d:'fill where mask is True'},
+      ],
+      assigns: [
+        {t:'Boolean mask: zero out all values < 0 in a tensor in-place', h:'x[x < 0] = 0'},
+        {t:'Extract rows 0,2,4 from (6,8) tensor using fancy indexing', h:'x[[0,2,4]]'},
+        {t:'Use masked_fill to set attention padding positions to -inf', h:'scores.masked_fill(mask==0, float("-inf"))', star:true},
+        {t:'Compare x[mask] vs torch.where — when does each return different shapes?', h:'boolean index → 1D; where → same shape'},
+      ]
+    },
+    {
+      id: 'pt-shape', name: 'Shape Manipulation',
+      sub: 'view vs reshape — critical distinction',
+      fns: [
+        {c:'x.view(3,4)', d:'reshape — requires contiguous'},
+        {c:'x.reshape(3,4)', d:'reshape — handles non-contiguous'},
+        {c:'x.permute(0,2,1)', d:'reorder axes'},
+        {c:'x.transpose(1,2)', d:'swap two dims'},
+        {c:'x.unsqueeze(0)', d:'add dim at position'},
+        {c:'x.squeeze()', d:'remove size-1 dims'},
+        {c:'x.squeeze(dim=0)', d:'remove specific dim if size 1'},
+        {c:'x.flatten()', d:'flatten to 1D'},
+        {c:'x.contiguous()', d:'make memory contiguous'},
+        {c:'x.expand(3,-1)', d:'broadcast without copying'},
+        {c:'x.repeat(2,3)', d:'repeat along dims (copies)'},
+      ],
+      assigns: [
+        {t:'Reshape (B*T, D) back to (B, T, D) — what info do you need?', h:'need B or T explicitly: view(B,T,D)', star:true},
+        {t:'Given (B,T,H,D), permute to (B,H,T,D) — attention head reshape', h:'permute(0,2,1,3)', star:true},
+        {t:'When does .view() fail? Fix it without reshape', h:'.contiguous().view(...)'},
+        {t:'expand vs repeat: add batch dim and expand to (4,3,4) without copying data', h:'unsqueeze(0).expand(4,-1,-1)'},
+        {t:'Add seq dim to (B,D) embedding to get (B,1,D)', h:'unsqueeze(1)'},
+      ]
+    },
+    {
+      id: 'pt-math', name: 'Math Operations',
+      sub: 'Arithmetic and elementwise ops',
+      fns: [
+        {c:'x + y, x - y, x * y, x / y', d:'element-wise'},
+        {c:'torch.exp(x)', d:'eˣ'},
+        {c:'torch.log(x)', d:'natural log'},
+        {c:'torch.sqrt(x)', d:'square root'},
+        {c:'torch.abs(x)', d:'absolute value'},
+        {c:'torch.clamp(x, 0, 1)', d:'clip values'},
+        {c:'torch.pow(x, 2)', d:'power'},
+        {c:'torch.sigmoid(x)', d:'1/(1+e⁻ˣ)'},
+        {c:'torch.tanh(x)', d:'tanh'},
+        {c:'F.relu(x)', d:'ReLU via functional'},
+        {c:'F.softmax(x, dim=-1)', d:'softmax along dim'},
+      ],
+      assigns: [
+        {t:'Implement softmax manually using only exp, sum, basic ops', h:'subtract max for stability', star:true},
+        {t:'Implement sigmoid, verify against torch.sigmoid on same input', h:'1 / (1 + torch.exp(-x))'},
+        {t:'Clamp logits to [-100, 100] before softmax — why?', h:'exp overflow prevention'},
+        {t:'ReLU: implement with clamp, with torch.maximum, and with F.relu — all three', h:'three equivalent ways'},
+      ]
+    },
+    {
+      id: 'pt-agg', name: 'Aggregations',
+      sub: 'Reductions along dimensions',
+      fns: [
+        {c:'x.sum(dim=-1)', d:'sum along last dim'},
+        {c:'x.mean(dim=0, keepdim=True)', d:'mean, keep dim for broadcast'},
+        {c:'x.std(dim=1)', d:'std along axis'},
+        {c:'x.min(dim=0)', d:'returns (values, indices)'},
+        {c:'x.max(dim=-1).values', d:'extract just values'},
+        {c:'x.argmax(dim=-1)', d:'index of max'},
+        {c:'x.norm(dim=-1)', d:'L2 norm along last dim'},
+        {c:'x.prod(dim=0)', d:'product along axis'},
+      ],
+      assigns: [
+        {t:'Compute attention scores: normalize (B,T,T) matrix per row', h:'sum(dim=-1, keepdim=True)'},
+        {t:'From (B,T,V) logits, find the token with max prob at each position', h:'argmax(dim=-1) → (B,T)'},
+        {t:'Compute mean and std per feature in (N,D) — subtract and divide', h:'layer norm manually', star:true},
+        {t:'Find which sample in a batch has the largest L2 norm', h:'.norm(dim=-1).argmax()'},
+      ]
+    },
+    {
+      id: 'pt-matmul', name: 'Matrix Multiply',
+      sub: 'mm vs matmul vs bmm',
+      fns: [
+        {c:'torch.mm(A, B)', d:'2D only: (n,m)@(m,p)→(n,p)'},
+        {c:'torch.matmul(A, B)', d:'general: handles batches'},
+        {c:'A @ B', d:'operator form of matmul'},
+        {c:'torch.bmm(A, B)', d:'explicit batch: (B,n,m)@(B,m,p)'},
+        {c:'torch.einsum("bik,bjk->bij", Q, K)', d:'einsum for attention'},
+        {c:'torch.outer(a, b)', d:'outer product'},
+      ],
+      assigns: [
+        {t:'Compute Q@K^T for shapes (B,H,T,d) — what is output shape?', h:'→ (B,H,T,T)', star:true},
+        {t:'When does @ fail where bmm works?', h:'@ is more general; bmm is explicit 3D only'},
+        {t:'Implement pairwise dot products between all pairs of rows', h:'X @ X.T'},
+        {t:'Use einsum to compute attention: einsum("bhid,bhjd->bhij",Q,K)', h:'equivalent to Q@K.transpose(-2,-1)'},
+      ]
+    },
+    {
+      id: 'pt-combine', name: 'Combining Tensors',
+      sub: 'cat, stack, chunk',
+      fns: [
+        {c:'torch.cat([a,b], dim=0)', d:'concat along existing dim'},
+        {c:'torch.stack([a,b], dim=0)', d:'new dim at position'},
+        {c:'torch.split(x, size, dim)', d:'split into chunks'},
+        {c:'torch.chunk(x, n, dim)', d:'split into n equal parts'},
+        {c:'torch.unbind(x, dim)', d:'unpack along dim'},
+      ],
+      assigns: [
+        {t:'Stack 4 attention head outputs (B,T,d_k) into (B,T,4,d_k)', h:'torch.stack(heads, dim=2)', star:true},
+        {t:'Then reshape (B,T,4,d_k) to (B,T,4*d_k) for projection', h:'.reshape(B,T,-1)'},
+        {t:'cat vs stack: two (3,4) tensors → what shape from each on dim=0?', h:'cat→(6,4), stack→(2,3,4)'},
+        {t:'Split (B,T,3*D) into Q,K,V each of shape (B,T,D)', h:'torch.chunk(x, 3, dim=-1)'},
+      ]
+    },
+    {
+      id: 'pt-device', name: 'Device & Dtype',
+      sub: 'CPU ↔ GPU, type casting',
+      fns: [
+        {c:'x.to("cuda")', d:'move to GPU'},
+        {c:'x.to("cpu")', d:'move to CPU'},
+        {c:'x.to(device)', d:'variable device string'},
+        {c:'torch.device("cuda" if torch.cuda.is_available() else "cpu")', d:'standard device check'},
+        {c:'x.cuda()', d:'shorthand to GPU'},
+        {c:'x.cpu()', d:'shorthand to CPU'},
+        {c:'x.float()', d:'→ float32'},
+        {c:'x.half()', d:'→ float16'},
+        {c:'x.double()', d:'→ float64'},
+        {c:'x.long()', d:'→ int64'},
+      ],
+      assigns: [
+        {t:'Write a device-agnostic tensor creation: create on CPU or GPU based on availability', h:'torch.device(...) then .to(device)'},
+        {t:'What happens when you add a CPU tensor to a GPU tensor?', h:'RuntimeError — must be on same device'},
+        {t:'Move model and data to device in the correct order', h:'model.to(device), X.to(device)'},
+        {t:'When would you use .half() for inference?', h:'fp16 inference speed/memory — but risks overflow'},
+      ]
+    },
+    {
+      id: 'pt-autograd', name: 'Autograd Basics',
+      sub: 'Gradient tracking — not training loops',
+      fns: [
+        {c:'x = torch.randn(3, requires_grad=True)', d:'mark for gradient tracking'},
+        {c:'loss.backward()', d:'compute all gradients'},
+        {c:'x.grad', d:'accumulated gradient tensor'},
+        {c:'x.detach()', d:'new tensor, no grad history'},
+        {c:'x.detach_()','d':'detach in-place'},
+        {c:'torch.no_grad()', d:'context: no tracking'},
+        {c:'x.grad_fn', d:'shows how x was computed'},
+        {c:'x.is_leaf', d:'True if user-created'},
+      ],
+      assigns: [
+        {t:'Compute d(x²)/dx at x=3 using autograd — verify equals 6', h:'x.backward(), x.grad', star:true},
+        {t:'Compute gradient of sum(x*w) wrt w', h:'standard linear layer gradient'},
+        {t:'Show that .detach() stops gradient flow through a computation', h:'detach mid-graph, backward should not reach earlier nodes'},
+        {t:'Why must you zero gradients before backward? Show accumulated grad bug', h:'.grad accumulates — zero_grad() resets it', star:true},
+      ]
+    },
+  ]
+};
+
+let currentLib = 'np';
+let currentTopic = null;
+let done = {};
+
+try { done = JSON.parse(localStorage.getItem('np_pt_done') || '{}'); } catch(e){}
+function save() { try { localStorage.setItem('np_pt_done', JSON.stringify(done)); } catch(e){} }
+
+function switchLib(lib) {
+  currentLib = lib;
+  currentTopic = null;
+  document.getElementById('tab-np').classList.toggle('active', lib === 'np');
+  document.getElementById('tab-pt').classList.toggle('active', lib === 'pt');
+  renderSidebar();
+  renderMain(null);
+  updateFooter();
+}
+
+function renderSidebar() {
+  const list = document.getElementById('topic-list');
+  const topics = TOPICS[currentLib];
+  list.innerHTML = topics.map((t, i) => {
+    const total = t.assigns.length;
+    const d = t.assigns.filter((_, ai) => done[t.id + '-' + ai]).length;
+    const isActive = currentTopic && currentTopic.id === t.id;
+    return `<div class="topic-item ${isActive ? 'active ' + currentLib : ''}" onclick="selectTopic(${i})">
+      <span class="topic-name">${t.name}</span>
+      <span class="topic-progress">${d}/${total}</span>
+    </div>`;
+  }).join('');
+}
+
+function selectTopic(i) {
+  currentTopic = TOPICS[currentLib][i];
+  renderSidebar();
+  renderMain(currentTopic);
+  updateFooter();
+}
+
+function renderMain(topic) {
+  const body = document.getElementById('main-body');
+  const title = document.getElementById('main-title');
+  const sub = document.getElementById('main-sub');
+
+  if (!topic) {
+    title.textContent = 'Select a topic';
+    sub.textContent = '← pick from the list';
+    body.innerHTML = `<div class="empty-state"><h2>Nothing selected</h2><p>Choose a topic from the sidebar.</p></div>`;
+    return;
+  }
+
+  const color = currentLib === 'np' ? 'var(--np)' : 'var(--pt)';
+  title.textContent = topic.name;
+  title.style.color = color;
+  sub.textContent = topic.sub;
+
+  const btnClass = currentLib === 'np' ? 'np-btn' : 'pt-btn';
+  const lib = currentLib === 'np' ? 'NumPy' : 'PyTorch';
+
+  body.innerHTML = `
+    <div class="card">
+      <div class="card-header"><span class="card-title">Key Functions &amp; Syntax</span></div>
+      <div class="card-body">
+        <div class="fn-grid">
+          ${topic.fns.map(f => `
+            <div class="fn-row">
+              <span class="fn-code">${f.c}</span>
+              <span class="fn-desc">— ${f.d}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Assignments</span>
+        <span style="font-size:11px;color:var(--dim);font-family:var(--mono)">★ = tricky</span>
+      </div>
+      <div class="card-body">
+        <div class="assign-list">
+          ${topic.assigns.map((a, ai) => {
+            const key = topic.id + '-' + ai;
+            const isDone = !!done[key];
+            return `<div class="assign-item ${isDone ? 'done' : ''}" onclick="toggleAssign('${key}')">
+              <div class="assign-cb">
+                <svg class="check" width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div>
+                <div class="assign-text">${a.t}${a.star ? '<span class="star">★</span>' : ''}</div>
+                <div class="assign-hint">hint: ${a.h}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="drill-panel">
+      <div class="drill-header">
+        <span class="card-title">AI Drill Generator</span>
+        <button class="drill-btn ${btnClass}" id="drill-btn" onclick="generateDrill()">
+          Generate problem for ${topic.name}
+        </button>
+      </div>
+      <div class="drill-body" id="drill-body">
+        <div class="drill-placeholder">Click the button to generate a fresh coding problem for this topic. The problem will require you to implement something from scratch — no frameworks beyond ${lib}.</div>
+      </div>
+    </div>`;
+}
+
+function toggleAssign(key) {
+  done[key] = !done[key];
+  save();
+  renderSidebar();
+  const item = event.currentTarget;
+  item.classList.toggle('done');
+  updateFooter();
+}
+
+function updateFooter() {
+  const topics = TOPICS[currentLib];
+  let total = 0, d = 0;
+  topics.forEach(t => {
+    total += t.assigns.length;
+    t.assigns.forEach((_, ai) => { if(done[t.id+'-'+ai]) d++; });
+  });
+  document.getElementById('footer-label').textContent = d + ' / ' + total + ' done';
+  document.getElementById('footer-bar').style.width = total ? Math.round(d/total*100)+'%' : '0%';
+  document.getElementById('footer-bar').className = 'prog-fill ' + currentLib;
+}
+
+async function generateDrill() {
+  const btn = document.getElementById('drill-btn');
+  const body = document.getElementById('drill-body');
+  if (!currentTopic) return;
+  btn.disabled = true;
+  body.innerHTML = `<div style="color:var(--muted);font-size:13px">
+    Generating<span class="loading-dot">.</span><span class="loading-dot">.</span><span class="loading-dot">.</span>
+  </div>`;
+
+  const lib = currentLib === 'np' ? 'NumPy' : 'PyTorch';
+  const fns = currentTopic.fns.map(f => f.c).join(', ');
+  const topicName = currentTopic.name;
+
+  const systemPrompt = `You are a technical interviewer for an ML Engineer intern role at an AV company. Generate ONE focused coding drill problem. Rules:
+- Use only ${lib}, no other ML libraries
+- The problem must require implementing something from scratch (not just calling a function)
+- Difficulty: medium (solvable in 10-15 minutes)
+- Include: a clear problem statement, constraints, and a starter template with TODOs
+- Format with these exact sections:
+PROBLEM: (2-3 sentences describing what to implement)
+CONSTRAINTS: (bullet points of what they cannot use, shape requirements)
+STARTER:
+\`\`\`python
+(starter code with TODO comments)
+\`\`\`
+VERIFICATION: (2-3 lines to test their solution is correct)
+Keep the response concise and practical. No preamble, no explanation after the verification block.`;
+
+  const userPrompt = `Topic: ${topicName} in ${lib}
+Relevant functions: ${fns}
+Generate a drill problem that tests deep understanding of this topic. The problem should require combining 2-3 of these operations in a non-trivial way.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content.map(b => b.text || '').join('');
+    body.innerHTML = formatDrill(text);
+  } catch(e) {
+    body.innerHTML = `<div style="color:var(--red);font-size:13px">Error generating problem. Check API access.</div>`;
+  }
+  btn.disabled = false;
+}
+
+function formatDrill(text) {
+  let html = text
+    .replace(/^PROBLEM:/gm, '<div class="section-label">Problem</div>')
+    .replace(/^CONSTRAINTS:/gm, '<div class="section-label">Constraints</div>')
+    .replace(/^STARTER:/gm, '<div class="section-label">Starter Code</div>')
+    .replace(/^VERIFICATION:/gm, '<div class="section-label">Verification</div>')
+    .replace(/```python\n?([\s\S]*?)```/g, '<pre>$1</pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n- /g, '\n• ')
+    .replace(/\n/g, '<br>');
+  return `<div class="drill-content">${html}</div>`;
+}
+
+// Init
+renderSidebar();
+updateFooter();
+</script>
+</body>
+</html>

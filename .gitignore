@@ -3,5 +3,5 @@ node_modules/
 *.log
 __pycache__/
 
-/media/vchopra/DATA/Complete Technical Work/Reference and Tutorial Content/Artificial Intelligence/AI Code Repository/DL Frameworks/TensorBoard/data
+datasets/
 
