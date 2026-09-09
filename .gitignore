@@ -5,3 +5,10 @@ __pycache__/
 
 datasets/
 
+# Local runtimes and rebuildable package/model caches
+**/.venv/
+**/.hf-cache/
+**/.pip-cache/
+**/.conda-pkgs/
+**/.tiktoken-cache/
+**/__pycache__/
