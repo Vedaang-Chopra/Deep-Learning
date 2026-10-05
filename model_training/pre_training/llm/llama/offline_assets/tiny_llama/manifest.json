@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "purpose": "Tiny randomly initialized offline LLaMA-style environment test; no Meta weights.",
+  "corpus_source": "Karpathy Tiny Shakespeare already present locally",
+  "files": {
+    "tiny_corpus.txt": {
+      "bytes": 1115394,
+      "sha256": "86c4e6aa9db7c042ec79f339dcb96d42b0075e16b8fc2e86bf0ca57e2dc565ed"
+    },
+    "tiny_tokenizer.model": {
+      "bytes": 246724,
+      "sha256": "3e95e912263ff926e9d10b991fac46616bc926933894346fb9c0630f2b200fd4"
+    },
+    "tiny_tokenizer.vocab": {
+      "bytes": 4921,
+      "sha256": "8af3f9d9675ce6d4f39d57f195eff7654e6eb0a52252d0727e1c6e3f91628550"
+    },
+    "params.json": {
+      "bytes": 110,
+      "sha256": "1c89482ba85ded3441a1f15455b37634fd4b90f5390cfe593cf03af324d6b1e1"
+    }
+  }
+}
