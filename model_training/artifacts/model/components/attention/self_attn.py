@@ -1,27 +1,28 @@
 import torch 
 import torch.nn as nn
-
+from torch.nn import functional as F
+import math
 
 
 class CausalSelfAttention(nn.Module):
     def __init__(self, config, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        assert config.n_embd % config.n_head ==0 ## THis ensures embedding is split properly across the heads
+        assert config.emb_dim % config.n_head ==0 ## THis ensures embedding is split properly across the heads
         
         ## 
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
+        self.c_attn = nn.Linear(config.emb_dim, 3 * config.emb_dim)
         
         # self.c_proj.NANOGPT_SCALE_INIT =1
         
-        self.c_proj = nn.Linear(config.n_embd, config.n_embd)
+        self.c_proj = nn.Linear(config.emb_dim, config.emb_dim)
         ## Regularization 
         self.n_head = config.n_head
-        self.n_embd = config.n_embd
+        self.emb_dim = config.emb_dim
         
         self.register_buffer("bias", 
-                            torch.tril(torch.ones(config.block_size, config.block_size)).view(
-                            1, 1, config.block_size, config.block_size
+                            torch.tril(torch.ones(config.context_len, config.context_len)).view(
+                            1, 1, config.context_len, config.context_len
                             ))
         
     def forward(self, x):
@@ -29,7 +30,7 @@ class CausalSelfAttention(nn.Module):
         
         qkv = self.c_attn(x)
         
-        q, k, v = qkv.split(self.n_embd, dim=2)
+        q, k, v = qkv.split(self.emb_dim, dim=2)
         
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) ## (B, nh,  T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) ## (B, nh,  T, hs)

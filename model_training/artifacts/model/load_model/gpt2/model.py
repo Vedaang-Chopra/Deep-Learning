@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from transformers import GPT2LMHeadModel
 
-from model_training.artifacts.model.components.block.gpt2_block import Block
+from old_model_training.model_training.artifacts.model.components.block.gpt2_block import Block
 
 
 class GPT(nn.Module):
@@ -16,19 +16,18 @@ class GPT(nn.Module):
         
         ### Module Dict -> Allows to index using Keys....
         self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
+            wte = nn.Embedding(config.vocab_size, config.emb_dim),
+            wpe = nn.Embedding(config.context_len, config.emb_dim),
             ### Module List -> Arrays of Blocks
             h= nn.ModuleList([
                 Block(config) for _ in range(config.n_layer)]),
-            ln_f = nn.LayerNorm(config.n_embd)
+            ln_f = nn.LayerNorm(config.emb_dim)
             
         ))
         
         ## Final Linear Layer -> Embedding to Vocabulary (Generates the Final Word)
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.lm_head = nn.Linear(config.emb_dim, config.vocab_size, bias=False)
 
-    
     @classmethod
     def from_pretrained(self, load_config, model_type):
         """Loads pre trained weights from huggingface"""
@@ -71,7 +70,7 @@ class GPT(nn.Module):
     def forward(self, idx, targets =None):
         B, T = idx.size()
         
-        assert T<= self.config.block_size, f"Cannot forward on Sequence Length {T}, block size is only {self.config.block_size}"
+        assert T<= self.config.context_len, f"Cannot forward on Sequence Length {T}, block size is only {self.config.context_len}"
         
         pos = torch.arange(0, T, dtype = torch.long, device = idx.device)
         pos_embd = self.transformer.wpe(pos)
@@ -90,3 +89,9 @@ class GPT(nn.Module):
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
         return loss, logits
     
+            
+        
+            
+        
+        
+        
