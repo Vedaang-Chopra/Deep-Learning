@@ -1,11 +1,7 @@
 from pathlib import Path
-def find_project_root(start=None, markers=("pyproject.toml", ".git", "requirements.txt", ".gitignore")):
-    p = Path(start or Path.cwd()).resolve()
-    for cur in [p, *p.parents]:
-        if any((cur / m).exists() for m in markers):
-            return cur
-    return p
 
-BASE_CODE_DIR_PATH = find_project_root()
-DATASET_DIR = BASE_CODE_DIR_PATH / 'datasets'
-DATASET_DIR, BASE_CODE_DIR_PATH
+# Shared datasets live at the Deep-Learning repo root: <root>/datasets
+REPO_ROOT = Path(__file__).resolve().parents[4]
+DATASETS_ROOT = REPO_ROOT / "datasets"
+BASE_CODE_DIR_PATH = DATASETS_ROOT
+DATASET_DIR = DATASETS_ROOT
