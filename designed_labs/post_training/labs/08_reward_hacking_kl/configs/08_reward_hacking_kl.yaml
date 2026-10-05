@@ -1,0 +1,63 @@
+# Lab 08 — Reward hacking & KL regularization — single shared config.
+#
+# Long runs are your Lab 07 trainer invoked with THIS config (the lab reuses
+# Lab 07 infrastructure; no forked trainer). Notebook reads the JSONL metrics
+# written under artifacts_dir.
+
+lab:
+  id: "08_reward_hacking_kl"
+  title: "Reward Hacking & KL Regularization"
+  prerequisites: ["lab_07_complete", "lecture_9", "chapter_14", "chapter_15"]
+  references:
+    - https://rlhfbook.com/course/lec9-chap14-appb-overoptimization.html
+    - https://rlhfbook.com/c/14-over-optimization
+    - https://rlhfbook.com/c/15-regularization
+
+model:
+  name: "Qwen/Qwen3-0.6B"          # Tier B arm: Qwen/Qwen3-1.7B
+  tier: "A"                          # A=Colab dev, B=A40 cluster
+
+data:
+  tasks: ["spell_backward", "gsm8k"] # same RLVR pair as Lab 07
+  gsm8k_split: "test"
+  gsm8k_subset_size: 1000
+
+reused_lab07_assets:
+  engine_config: "/coc/scratch/vchopra/post_training_labs/07_grpo_rlvr/config/grpo.yaml"
+  checkpoint_dir: "/coc/scratch/vchopra/post_training_labs/07_grpo_rlvr/checkpoints"
+  metrics_pattern: "metrics*.jsonl"
+
+# --- The deliberate misalignment -------------------------------------------
+proxy_reward:
+  # Composite = correctness_weight * verifier_correct + format_bonus.
+  # format_bonus is LARGE on purpose: a format-perfect wrong-answer rollout
+  # must score near the top for the lab's premise to hold.
+  correctness_weight: 1.0
+  format_bonus: 10.0
+  proxy_reward_weight: 0.4          # REQUIRED KEY — how much of the total
+                                    # reward budget goes to the (misaligned)
+                                    # format-bonus component vs. true verifier
+                                    # correctness. Baseline arm: 0.0.
+  baseline_arm:                      # control run, proxy == truth
+    proxy_reward_weight: 0.0
+
+sweep:
+  kl_coef_grid: [0.0, 0.001, 0.01, 0.04, 0.2]   # REQUIRED KEY — one rerun per β
+  group_size: 8                       # N completions/prompt (match Lab 07)
+  max_steps_per_beta: 300
+  seed: 42
+  zero_contrast_groups: "skip"        # carry over your Lab 07 choice + rationale
+
+metrics:
+  # Series that MUST be present in every JSONL row (true metric tracked
+  # separately from proxy).
+  required: ["step", "proxy_reward", "true_accuracy", "format_rate", "approx_kl"]
+  warning_metric_candidates:
+    ["format_rate", "response_length", "approx_kl", "group_reward_variance"]
+
+artifacts_dir: "/coc/scratch/vchopra/post_training_labs/08_reward_hacking_kl"
+
+cluster:
+  wrapper: "tmux"                     # hard rule: no unattended starts
+  pin_cuda_visible_devices: true
+  occupancy_check: "nvidia-smi --query-compute-apps"

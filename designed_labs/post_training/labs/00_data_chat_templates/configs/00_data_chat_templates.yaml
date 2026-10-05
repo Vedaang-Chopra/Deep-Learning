@@ -1,0 +1,35 @@
+# Lab 00 — Data & Chat Templates, shared config (notebook + starter)
+# CPU-only inspection lab: no training, no GPU. Answer key:
+# rlhf-book/code/instruction_tuning/utils.py lines 153-244 (_encode_batch / collate).
+
+# Models under inspection (plan §4 register)
+models:
+  base: Qwen/Qwen3-0.6B-Base            # ships its own chat template
+  base_template_donor:
+    model: allenai/OLMo-2-0425-1B       # base model has NO chat template
+    chat_template_source: allenai/OLMo-2-0425-1B-SFT   # donor applies the template
+  instruct_small: HuggingFaceTB/SmolLM2-360M-Instruct  # instruct: answer-and-stop behavior
+
+# Dataset (CC BY-NC 4.0; educational use only)
+dataset:
+  name: HuggingFaceH4/no_robots
+  split: train
+  first_n_rows: 50                      # inspection slice only
+
+# Inspection settings
+inspection:
+  max_length: 512                       # truncation ceiling for chat-template renders
+  padding_side: right                   # exercise: what breaks with LEFT pads instead?
+  n_decode_unmasked_samples: 10         # experiment: decode-unmasked on 10 samples
+  panel_prompts: 6                      # fixed prompt pool for base-vs-instruct demo
+  add_generation_prompt: true           # prompt-side render for the masking comparison
+
+# Outputs (paths follow the cluster convention; local runs can use relative paths)
+output_dir: /coc/scratch/vchopra/post_training_labs/00_data_chat_templates/artifacts
+
+# Pedigree
+compare_against: rlhf-book/code/instruction_tuning/utils.py#L153-L244
+prerequisites:
+  - Lecture 0 (https://rlhfbook.com/course/)
+  - Lecture 1 (https://rlhfbook.com/course/)
+  - Chapter 3 (https://rlhfbook.com/)

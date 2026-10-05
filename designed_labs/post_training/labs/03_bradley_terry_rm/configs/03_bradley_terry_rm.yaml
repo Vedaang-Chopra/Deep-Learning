@@ -1,0 +1,43 @@
+# Lab 03 — Bradley-Terry reward model configuration
+# Mirrors RewardModelConfig in starter.py (kept in sync by contract).
+# Drives BOTH notebook.ipynb prototyping and the exported train script.
+
+run_name: lab03_bt_rm
+
+seed: 42
+
+model:
+  model_id: Qwen/Qwen3-0.6B-Base
+  freeze_backbone: false          # E1: also run with true and compare
+
+data:
+  dataset_name: argilla/ultrafeedback-binarized-preferences-cleaned
+  # Your Lab 02 artifacts (override these paths locally):
+  cleaned_subset_path: null       # e.g. ../02_preference_data_forensics/outputs/cleaned_subset.jsonl
+  near_ties_path: null            # e.g. ../02_preference_data_forensics/outputs/near_ties.jsonl
+  subset_sizes_to_sweep: [1000, 2000, 5000]   # E3
+  val_fraction: 0.05
+  max_length: 1024                # smoke-run at 512 first
+
+train:
+  batch_size: 4
+  grad_accum_steps: 8             # effective batch 32 pairs
+  epochs: 1
+  learning_rate: 5.0e-6           # E2 sweep: [1.0e-6, 5.0e-6, 2.0e-5]
+  weight_decay: 0.0
+  warmup_ratio: 0.03
+  max_grad_norm: 1.0
+  use_amp: true
+  eval_every_steps: 50
+
+eval:
+  # Ascending edges for margin-bucket calibration; buckets partition margins
+  # into [edge_i, edge_i+1) with open-ended top bucket (and bottom for < first edge).
+  margin_bucket_edges: [0.0, 1.0, 2.0, 4.0]
+  histogram_bins: 40
+
+logging:
+  jsonl_path: runs/lab03_bt_rm/metrics.jsonl   # every eval appends one line
+  wandb: false                     # optional; runs stay reproducible from JSONL alone
+
+output_dir: runs/lab03_bt_rm

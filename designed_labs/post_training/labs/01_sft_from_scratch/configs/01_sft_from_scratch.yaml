@@ -1,0 +1,60 @@
+# Lab 01 — SFT from scratch, single shared config (notebook + exported train.py)
+# Answer-key parity arm: configs/sft_olmo2_1b.yaml in rlhf-book/code/instruction_tuning/
+# (model swapped per plan §4 register; everything else keeps comparable semantics).
+
+# Model
+model_name: Qwen/Qwen3-0.6B-Base        # Tier A (Colab). Tier B: Qwen/Qwen3-1.7B-Base
+chat_template_source: null              # Qwen3 tokenizer ships a chat template
+# answer-key parity (optional): model_name: allenai/OLMo-2-0425-1B,
+#                               chat_template_source: allenai/OLMo-2-0425-1B-SFT
+
+# Dataset (CC BY-NC 4.0; educational use only)
+dataset_name: HuggingFaceH4/no_robots
+dataset_split: train
+max_samples: 2000                       # experiments sweep {500, 2000, null=~9.5k}
+max_length: 2048
+
+# Training (sweep lr in {1.0e-6, 5.0e-6, 2.0e-5}; epochs {1, 3})
+lr: 5.0e-6
+num_epochs: 3
+batch_size: 4
+gradient_accumulation_steps: 8          # effective batch = 32
+warmup_ratio: 0.1
+weight_decay: 0.0
+max_grad_norm: 1.0
+seed: 42
+
+# LoRA-from-scratch checkpoint (null => full fine-tune)
+lora:
+  enabled: true                         # set false for the full-FT comparison arm
+  r: 8                                  # experiments: {8, 32}
+  alpha: 16                             # scaling alpha/r documented in starter.LoRALinear
+  target_modules: [q_proj, v_proj]      # extend to k_proj/o_proj/MLP in extensions
+
+# Optional naive sequence packing exercise
+packing:
+  enabled: false                        # true => pack_sequences replaces padding path
+  pack_length: 2048
+
+# Hardware
+bf16: true                              # T4 has no bf16: use fp16 (see LABS_SETUP.md)
+gradient_checkpointing: true
+device: auto                            # auto|cuda|cpu
+
+# In-loop generation panel
+sample_every: 50
+sample_max_tokens: 128
+sample_max_input_tokens: 512
+temperature: 0.7
+top_p: 0.9
+do_sample: true                         # panels run greedy AND sampled once trained
+
+# Periodicity & outputs
+eval_every_steps: 100
+save_every_steps: 500
+output_dir: /coc/scratch/vchopra/post_training_labs/01_sft_from_scratch/runs/lab01_run1
+metrics_filename: metrics.jsonl         # one JSON line per optimizer step
+
+# Logging
+wandb_project: null                     # set via WANDB_PROJECT env var or change here
+wandb_run_name: lab01_sft_no_robots_qwen3_06b

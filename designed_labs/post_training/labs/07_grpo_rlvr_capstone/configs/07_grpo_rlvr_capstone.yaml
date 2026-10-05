@@ -1,0 +1,62 @@
+# Lab 07 — GRPO / RLVR capstone
+# Flat mirror of the answer-key config (downsized to learning scale):
+#   ../../../rlhf-book/code/policy_gradients/configs/grpo.yaml
+# Deviation from repo defaults, documented per curriculum plan:
+#   model Qwen3-0.6B (dev) instead of Qwen3-1.7B; upgrade to 1.7B on the A40.
+# Sweep arms: copy this file and flip ONE axis per run (loss_mode, beta,
+# clip eps, num_rollouts, loss_normalization) — see README §Experiments.
+
+run_name: lab07_grpo_spell_backward
+
+loss_mode: grpo       # "grpo" | "drgrpo" — the standardized vs non-standardized advantage arms
+model_name: Qwen/Qwen3-0.6B
+
+lr: 5e-6              # matches grpo.yaml
+
+# --- sampling ---
+temperature: 0.6
+top_p: 0.95
+top_k: 20
+min_p: 0.0
+max_new_tokens: 512
+
+# --- group geometry ---
+prompts_per_step: 4   # N prompts per step (grpo.yaml value)
+num_rollouts: 8       # K completions per prompt — the GRPO group size (grpo.yaml value)
+                      # N sweep {4, 8, 16}: num_rollouts IS the sweep axis
+
+# --- clipped update (asymmetric eps support) ---
+clip_eps_lo: 0.2      # lower bound excursion: 1 - eps_lo
+clip_eps_hi: 0.2      # grpo.yaml uses symmetric 0.2/0.2; the eps sweep and
+                      # DAPO's clip-higher idea set hi > lo (e.g. 0.28)
+
+# --- KL penalty to reference policy ---
+beta: 0.0             # 0 = disabled (grpo.yaml value); sweep {0, 0.001, 0.04}
+kl_estimator: kl3     # kl1 | kl2 | kl3 — ALL are implemented BY HAND this lab;
+                      # grpo.yaml defaults to kl3. compare_kl_estimators() in
+                      # starter.py evaluates all three on the same batch for
+                      # the required comparison plot.
+
+# --- zero-contrast groups ---
+# Policy for groups whose K rewards are all equal ("skip" | "weight" | "error").
+# You implement all three and JUSTIFY your production choice in the README —
+# this value is the initial hypothesis, not a scaffold-given answer.
+zero_contrast_groups: skip
+
+# --- loss aggregation ---
+loss_normalization: sequence_mean   # "sequence_mean" | "token" — the token-level
+                                    # vs sequence-mean normalization experiment axis
+format_weight: 0.3    # weight of the format reward inside the total reward
+
+# --- optimization hygiene ---
+max_norm: 1.0
+
+# --- data ---
+data_size: 3000       # spell_backward procedural pool size (grpo.yaml parity)
+gsm8k_max_examples: 1000  # GSM8K-1k transfer arm
+
+# --- observability ---
+metrics_path: runs/metrics.jsonl   # JSONL convention, curriculum plan §7.5;
+                                   # diagnostic panel keys in MetricsLogger.summarize_batch
+
+seed: 42

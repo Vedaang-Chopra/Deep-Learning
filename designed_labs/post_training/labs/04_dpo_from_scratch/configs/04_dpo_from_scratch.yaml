@@ -1,0 +1,43 @@
+# Lab 04 — DPO From Scratch: configuration
+# Shared by notebook.ipynb (prototype) and the train.py export (cluster run).
+# Answer key for comparison AFTER your version trains:
+#   rlhf-book/code/direct_alignment/configs/dpo.yaml
+#
+# Reference command shape (lab version):
+#   python3 starter.py --config configs/04_dpo_from_scratch.yaml
+
+# Model --------------------------------------------------------------------
+model_name: allenai/OLMo-2-0425-1B-SFT   # repo parity; Qwen/Qwen3-1.7B as modern alt
+reference_model_name: null               # null => frozen copy of policy's initial weights
+
+# Algorithm ----------------------------------------------------------------
+loss: dpo
+beta: 0.1                                # sweep arm baseline; other arms: 0.05, 0.5
+label_smoothing: 0.0                     # cDPO extension, optional
+
+# Dataset (Lab 02 output) ---------------------------------------------------
+dataset_name: argilla/ultrafeedback-binarized-preferences-cleaned
+lab02_cleaned_subset_path: null          # e.g. /coc/scratch/vchopra/post_training_labs/02_preference_forensics/cleaned_subset.jsonl
+dataset_split: train
+max_samples: 2000                        # deviation from answer key's 6400: A40 wall-clock + faster overfitting signal
+max_length: 1024                         # deviation from answer key's 2048
+
+# Training ------------------------------------------------------------------
+learning_rate: 5.0e-6
+num_epochs: 2
+batch_size: 4                            # per-device micro batch: 4 preference PAIRS
+gradient_accumulation_steps: 8           # effective batch = 32 pairs
+warmup_ratio: 0.1
+max_grad_norm: 1.0
+gradient_checkpointing: true
+bf16: true                               # T4/Colab fallback: fp16
+
+# Logging & outputs ---------------------------------------------------------
+log_every: 10
+metrics_path: ./outputs/metrics.jsonl    # every lab appends JSONL so notebooks plot from artifacts
+output_dir: ./outputs
+save_model: false
+seed: 42
+
+# Evaluation ---------------------------------------------------------------
+eval_prompts_path: ../shared/fixed_eval_prompts.json   # before/after generations on the fixed set

@@ -1,0 +1,42 @@
+# Lab 06 — REINFORCE / RLOO on an LLM
+# Flat mirrors of the answer-key configs (downsized to learning scale):
+#   ../../../rlhf-book/code/policy_gradients/configs/reinforce.yaml
+#   ../../../rlhf-book/code/policy_gradients/configs/rloo.yaml
+# Deviation from repo defaults, documented per curriculum plan:
+#   model Qwen3-0.6B (dev) instead of Qwen3-1.7B; upgrade to 1.7B on the A40.
+
+run_name: lab06_reinforce_spell_backward
+
+loss_mode: reinforce   # "reinforce" | "rloo"  — copy this file and flip for RLOO runs
+model_name: Qwen/Qwen3-0.6B
+
+lr: 5e-6               # matches both answer-key configs
+
+# --- sampling ---
+temperature: 0.6       # sweep {0.6, 1.0}
+top_p: 0.95
+top_k: 20
+min_p: 0.0
+max_new_tokens: 512
+
+# --- batch geometry ---
+prompts_per_step: 8    # answer-key reinforce.yaml value; rloo.yaml uses 4
+num_rollouts: 1        # REINFORCE: 1 (per-sample, baseline-free).
+                       # RLOO arms: set K in {4, 8} — that IS the group size.
+batch_geometry_note: >-
+  REINFORCE with K=1 samples one rollout per prompt and uses the reward itself
+  as the gradient coefficient; RLOO requires K >= 2 so a leave-one-out baseline
+  exists at all. Track which arm produced every metrics line via loss_mode.
+
+# --- KL to init policy ---
+beta: 0.0              # 0 = monitor-only (matches both answer-key configs); set >0 for the penalty arm
+kl_estimator: kl1      # this lab monitors approx-KL(k1) vs the INITIAL policy snapshot
+
+# --- data ---
+data_size: 15000       # spell_backward procedural pool size (repo parity)
+gsm8k_max_examples: 1000   # GSM8K-1k exact-match arm
+
+# --- observability ---
+metrics_path: runs/metrics.jsonl   # JSONL convention, curriculum plan §7.5
+
+seed: 42

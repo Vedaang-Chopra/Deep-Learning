@@ -1,0 +1,70 @@
+# Config for Lab 09 — Rejection Sampling -> SFT.
+#
+# One config drives ALL FOUR selection arms (answer-key style): the repo keeps
+# generation/scoring parameters identical across top_per_prompt,
+# random_per_prompt, top_k_overall, and random_k_overall so that Stage 1+2
+# (rollouts + scoring) share a single cache and only the cheap Stage 3a
+# selection step differs. Mirror of rlhf-book/code/rejection_sampling/configs/
+# {top_per_prompt,top_k_overall,random_per_prompt,random_k_overall}.yaml.
+#
+# DEVIATIONS from the answer key (document per §4 deviation policy):
+#   - reward_model_name / scorer_rm_checkpoint: the primary scorer is YOUR
+#     Lab 03 Bradley-Terry RM checkpoint (fill in the path after training it).
+#     nvidia/AceMath-7B-RM is kept as an optional comparison arm.
+
+data:
+  name: openai/gsm8k
+  subset: main
+  train_split: train
+  test_split: test
+  max_train_samples: 1000   # M prompts; None = full split
+  max_test_samples: 200
+
+# Stage 0 — policy model
+model_name: Qwen/Qwen3-1.7B        # Tier B; use Qwen/Qwen3-0.6B on Tier A
+reward_model_name: nvidia/AceMath-7B-RM   # optional production-RM comparison arm
+
+# === Scorer bridge to your own Lab 03 RM =====================================
+scorer:
+  kind: lab03_bt            # "lab03_bt" | "hf_rm" (huggingface AutoModel RM)
+  rm_checkpoint: null       # TODO: path to your Lab 03 BT RM checkpoint
+  score_batch_size: 2       # completions scored per forward pass
+
+# Stage 1 — generation (MUST stay identical across all four arms so the cache is shared)
+temperature: 0.8
+top_p: 0.95
+top_k_sampling: 20          # sampling-only knob (distinct from selection.top_k)
+min_p: 0.0
+max_new_tokens: 512
+num_completions_per_prompt: 8    # N in best-of-N
+rollout_batch_size: 8
+
+# Stage 2 — scoring cache
+cache_dir: ./output/rollouts     # <hash>.jsonl; hash = params that define Stage 1+2
+
+# Stage 3a — selection (four arms share everything except `strategy`/`top_k`)
+selection:
+  strategy: top_per_prompt   # one of: top_per_prompt | random_per_prompt | top_k_overall | random_k_overall
+  top_k: 1000                # only used by *_k_overall strategies; controls must match
+
+# Stage 3b — SFT on selected pairs (identical across arms)
+lr: 5.0e-6
+num_epochs: 2
+train_batch_size: 2
+batch_acc: 4
+max_norm: 1.0
+max_seq_length: 1024
+
+# Stage 3c — evaluation
+eval_temperature: 0.0        # greedy decode for exact-match eval
+eval_max_new_tokens: 512
+eval_batch_size: 8
+
+seed: 42
+device: auto                 # auto | cuda | cpu
+model_device_id: 0
+reward_model_device_id: 0
+output_dir: ./output
+save_checkpoint: false
+wandb_project: null          # set to enable W&B logging; JSONL metrics always written
+wandb_run_name: null         # convention: rs09_<strategy>_gsm8k

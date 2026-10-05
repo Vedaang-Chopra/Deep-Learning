@@ -1,0 +1,50 @@
+# Lab 11 — Evaluation & LLM-as-judge configuration
+# Mirrors EvalConfig in starter.py (kept in sync by contract).
+# Drives BOTH notebook.ipynb prototyping and the exported eval script.
+
+run_name: lab11_eval_judge
+
+seed: 42
+
+checkpoints:
+  # label -> checkpoint path (your Labs 00-04/06 artifacts). Labels become the
+  # win-rate matrix row/column names — keep them stable across runs.
+  # base: runs/lab00_base/final            # or the raw pretrained model id
+  # sft:  runs/lab01_sft/final
+  # dpo:  runs/lab04_dpo/final
+  # rl:   runs/lab06_rloo/final
+  checkpoint_paths: {}
+  # Your Lab 03 Bradley-Terry reward model (judge arm "rm"):
+  rm_checkpoint_path: null        # e.g. runs/lab03_bt_rm/final
+
+judge:
+  # Local judge — big enough to judge sensibly, small enough for Tier B, no
+  # API dependency. API judge (any frontier model) is the bias-comparison arm.
+  model_id: Qwen/Qwen3-4B
+  max_new_tokens: 256
+  temperature: 0.0                # deterministic judging for the bias audit
+  prompt_style: pairwise          # "pairwise" | "pointwise"
+  api_judge_name: null            # e.g. "gpt-5" for the comparison arm
+
+prompts:
+  # FROZEN fixed prompt set (JSONL: prompt_id, prompt, category). The win-rate
+  # matrix is only comparable across checkpoints evaluated on the SAME set.
+  prompt_set_path: null           # e.g. data/lab11_prompt_set.jsonl
+  verifiable_prompts_path: null   # subset with ground_truth (GSM8K exact match)
+  samples_per_checkpoint: 1
+  max_new_tokens: 512
+  max_prompt_length: 1024
+
+bias_audit:
+  swap_orders: true               # judge every pair in BOTH positions
+  n_order_swaps: 1                # extra shuffled repeats beyond the strict swap
+  length_gap_tokens_threshold: 200  # small-gap vs large-gap bucket boundary
+  self_preference_checkpoint: null  # e.g. "sft" if the judge shares lineage
+
+synthetic:                        # extension (absorbs old Lab 12)
+  teacher_model_id: Qwen/Qwen3-4B
+  n_synthetic_prompts: 200
+  filter_min_margin: 0.5
+  output_path: null               # e.g. data/lab11_synthetic_prefs.jsonl
+
+output_dir: runs/lab11_eval_judge

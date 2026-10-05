@@ -1,0 +1,52 @@
+# Lab 03b — ORM vs PRM configuration
+# Mirrors OrmPrmLabConfig in starter.py (kept in sync by contract).
+# Drives BOTH notebook.ipynb prototyping and the exported train script.
+
+run_name: lab03b_orm_vs_prm
+
+seed: 42
+
+model:
+  # Same backbone for both heads so score comparisons stay apples-to-apples.
+  model_id: Qwen/Qwen3-0.6B
+  freeze_backbone: false          # E1: also run with true and compare
+
+data:
+  # --- ORM side ---
+  rollout_dataset_name: RLHF-Book/gsm8k-qwen3-0.6B-rollouts
+  rollout_split: train
+  rollouts_per_prompt_cap: null   # null = all 100/prompt; set <= 8 for Colab (Tier A)
+  max_rows_orm: null              # global cap on ORM training rows
+  val_fraction: 0.05
+  max_length_orm: 1024            # smoke-run at 512 first
+  # --- PRM side ---
+  prm_dataset_name: tasksource/PRM800K
+  prm_split: train
+  prm_slice_rows: 20000           # Colab: drop to <= 1000
+  max_length_prm: 1536
+  step_pad_value: -100            # ignore_index for pad / non-step positions
+
+train:
+  batch_size: 4
+  grad_accum_steps: 8             # effective batch 32 examples per head
+  epochs: 1
+  learning_rate: 5.0e-6           # E2 sweep: [1.0e-6, 5.0e-6, 2.0e-5]
+  weight_decay: 0.0
+  warmup_ratio: 0.03
+  max_grad_norm: 1.0
+  use_amp: true
+  eval_every_steps: 50
+
+eval:
+  # Shared pool of held-out complete solutions scored by BOTH heads for the
+  # disagreement case-study table (deliverable floor: >= 20 solutions).
+  disagreement_pool_size: 64
+  min_cases_required: 20
+  orm_positive_threshold: 0.5     # sigmoid(logit) >= threshold -> verdict "correct"
+
+logging:
+  jsonl_path: runs/lab03b_orm_vs_prm/metrics.jsonl   # every eval appends one line
+  wandb: false                     # optional; runs stay reproducible from JSONL alone
+
+output_dir: runs/lab03b_orm_vs_prm
+disagreement_table_path: runs/lab03b_orm_vs_prm/disagreement_table.jsonl

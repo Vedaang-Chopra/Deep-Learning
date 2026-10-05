@@ -1,0 +1,30 @@
+# Lab 05 — Policy Gradients on a Toy MDP configuration
+# Mirrors ToyMDPConfig in starter.py (kept in sync by contract).
+# Drives BOTH notebook.ipynb prototyping and any exported experiment script.
+# CPU-only lab: nothing here should ever request a GPU.
+
+run_name: lab05_toy_mdp
+
+seed: 42
+
+env:
+  target_range_min: 0        # inclusive low for sampled targets N
+  target_range_max: 99       # inclusive high -> 2-digit addition coverage
+  # action space is fixed in starter.py (CHAR_ACTIONS); max episode chars = 12
+
+policy:
+  hidden_size: 128           # tiny MLP width; keep total params < 1M
+  # prefix encoding scheme is the student's choice (document it!)
+
+reinforce:
+  learning_rate: 0.01        # toy scale; sweep in notebook if unstable
+  episodes_per_update: 32
+  group_size_k: 4            # K grid for LOO arm: {2, 4, 16}
+  baseline: none             # none | moving_avg | loo  <- experiment axis E1
+  moving_avg_alpha: 0.9      # EMA decay for the moving-average baseline
+  entropy_coef: 0.0          # optional entropy bonus; >0 = your countermeasure
+
+logging:
+  jsonl_path: runs/lab05_toy_mdp/metrics.jsonl   # every update appends one line
+
+output_dir: runs/lab05_toy_mdp

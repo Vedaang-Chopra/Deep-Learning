@@ -1,0 +1,46 @@
+# Lab 02 — Preference-data forensics configuration
+# Mirrors ForensicsConfig in starter.py (kept in sync by contract).
+# Drives BOTH notebook.ipynb prototyping and the exported analysis script.
+# CPU-only lab: no model, no GPU, no network during tests.
+
+run_name: lab02_preference_forensics
+
+seed: 42
+
+data:
+  dataset_name: argilla/ultrafeedback-binarized-preferences-cleaned
+  split: train
+  limit: 3000                    # audit at least this many pairs
+  source_field: source           # per-instruction source in UltraFeedback
+
+audit:
+  sample_size: 100               # manual noise-audit worksheet size
+  seed: 42                       # deterministic sample
+  verdicts: [chosen_better, tie, rejected_better]
+
+near_ties:
+  ngram_size: 4                  # char n-gram size for Jaccard similarity
+  similarity_threshold: 0.85     # flag at or above this similarity
+
+formatting:
+  # list/markdown markers for the formatting-artifact win-rate analysis
+  patterns: ["- ", "* ", "1. ", "##", "**", "```"]
+
+decontamination:
+  ngram_n: 8                     # word-level 8-grams (industry standard)
+  min_shared_ngrams: 1           # flag a pair sharing >= this many
+  gsm8k_prompts_path: null       # local JSONL of GSM8K test prompts (no network)
+
+cleaning:
+  # starting point for your explicit filter rules — tune them yourself and
+  # record every removal in the removal report
+  min_prompt_chars: 10
+  max_response_chars: 8000
+  drop_identical_responses: true
+  drop_near_ties: false          # E-experiment: compare cleaned subsets with/without
+
+extension:
+  tulu3_rows: 500                # allenai/tulu-3-preference-mixture subset
+  tulu3_pairs_path: null         # locally exported normalized rows
+
+output_dir: outputs/lab02_preference_forensics
