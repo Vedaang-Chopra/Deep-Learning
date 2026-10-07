@@ -4,8 +4,8 @@ from torch.nn import functional as F
 
 
 
-from old_model_training.model_training.artifacts.model.components.attention.self_attn import CausalSelfAttention
-from old_model_training.model_training.artifacts.model.components.ffn.gpt2_ffn import MLP
+from model_training.artifacts.model.components.attention.self_attn import CausalSelfAttention
+from model_training.artifacts.model.components.ffn.gpt2_ffn import MLP
 
 
 
