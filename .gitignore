@@ -2,7 +2,7 @@ node_modules/
 *.env
 *.log
 __pycache__/
-
+*.DS_Store*
 datasets/
 
 # Local runtimes and rebuildable package/model caches

@@ -15,4 +15,3 @@ def load_banking_dataset():
     val_df = pd.DataFrame(dataset['test'], columns=dataset['test'].features)
     
     return train_df, val_df
-   
