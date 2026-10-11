@@ -15,7 +15,6 @@ def generate_prob(token_input, context_len, model):
     probs = torch.softmax(logits, dim=-1)
     return probs
 
-
 def gen_argmax(model, input_batch, max_new_tokens, context_len):
     
     while input_batch.size(1) < max_new_tokens:

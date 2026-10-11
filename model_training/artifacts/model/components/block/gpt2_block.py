@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 
 
-from model_training.artifacts.model.components.attention.self_attn import CausalSelfAttention, FlashCausalSelfAttention
+from model_training.artifacts.model.components.attention.self_attn import FlashCausalSelfAttention
 from model_training.artifacts.model.components.ffn.gpt2_ffn import MLP
 
 
@@ -15,10 +15,9 @@ class Block(nn.Module):
         super().__init__(*args, **kwargs)
         self.config = config
         
-        self.ln_1 = nn.LayerNorm(config.n_embd)
-        # self.attn = CausalSelfAttention(config)
+        self.ln_1 = nn.LayerNorm(config.emb_dim)
         self.attn = FlashCausalSelfAttention(config)
-        self.ln_2 = nn.LayerNorm(config.n_embd)
+        self.ln_2 = nn.LayerNorm(config.emb_dim)
         self.mlp = MLP (config)
     
     def forward(self, x):
