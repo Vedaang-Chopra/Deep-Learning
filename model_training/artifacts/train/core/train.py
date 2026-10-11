@@ -56,7 +56,7 @@ def train_model(model, train_components, train_config):
         norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         
         # Setup LR with Scheduler
-        lr = train_components.scheduler.cosine_lr(step=step,  
+        lr = train_components.scheduler(step=step,  
                                                 total_steps=train_config.num_steps,
                                                 warmup_steps= train_config.warmup_steps,
                                                 peak_lr=train_config.max_lr,
