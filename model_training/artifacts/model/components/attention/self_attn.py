@@ -9,13 +9,14 @@ class CausalSelfAttention(nn.Module):
         super().__init__(*args, **kwargs)
         
         assert config.emb_dim % config.n_head ==0 ## THis ensures embedding is split properly across the heads
-        
-        ## 
+         
         self.c_attn = nn.Linear(config.emb_dim, 3 * config.emb_dim)
         
-        # self.c_proj.NANOGPT_SCALE_INIT =1
-        
         self.c_proj = nn.Linear(config.emb_dim, config.emb_dim)
+        
+        ### As Standard Deviations scale due to adding residual Streams, so we add this flag to ensure that during initialization we scale it down
+        self.c_proj.NANOGPT_SCALE_INIT =1
+                
         ## Regularization 
         self.n_head = config.n_head
         self.emb_dim = config.emb_dim

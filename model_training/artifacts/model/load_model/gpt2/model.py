@@ -28,6 +28,14 @@ class GPT(nn.Module):
         ## Final Linear Layer -> Embedding to Vocabulary (Generates the Final Word)
         self.lm_head = nn.Linear(config.emb_dim, config.vocab_size, bias=False)
 
+        ## Apply weight Initialization rules as per paper
+        self.apply(self.__init_weights)
+        
+        ## The Final Linear is same as Embedding Layer -> Weight Sharing Scheme
+        self.transformer.wte.weight = self.lm_head.weight
+        
+        
+        
     @classmethod
     def from_pretrained(self, load_config, model_type):
         """Loads pre trained weights from huggingface"""
@@ -85,12 +93,23 @@ class GPT(nn.Module):
         logits = self.lm_head(x)
         
         loss = None
+        ### Calculating the Loss
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
         return loss, logits
     
             
-        
+    def __init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            std =0.02
+            if hasattr(module, 'NANOGPT_SCALE_INIT'):
+                std *= (2 * self.config.n_layer) ** -0.5
+            torch.nn.init.normal_(module.weight, mean=0.0, std=std) ## Xavier initialization is almost same as this
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            
             
         
         
