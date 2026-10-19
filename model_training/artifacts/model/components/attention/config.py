@@ -1,11 +1,12 @@
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-@dataclass
+
+@dataclass(frozen=True)
 class Rope:
     head_dim: int
-    context_len:int 
-    theta:int
+    context_len: int
+    theta: float = 10_000.0
     
     
 @dataclass
@@ -20,20 +21,27 @@ class TransformerConfig:
     rope_theta: float = 10_000.0
     rms_eps: float = 1e-6
     dropout: float = 0.0
+    use_rope :bool = True
+    rope_config: Rope = field(init=False)
+
+    
+    def __post_init__(self) -> None:
+        self.validate()
+
+        self.rope_config = Rope(
+            head_dim=self.d_model // self.n_heads,
+            context_len=self.max_seq_len,
+            theta=self.rope_theta,
+        )
 
     def validate(self) -> None:
         if self.d_model % self.n_heads != 0:
             raise ValueError("d_model must be divisible by n_heads")
+
         if self.n_heads % self.n_kv_heads != 0:
             raise ValueError("n_heads must be divisible by n_kv_heads")
-        if (self.d_model // self.n_heads) % 2:
+
+        head_dim = self.d_model // self.n_heads
+
+        if head_dim % 2 != 0:
             raise ValueError("RoPE head dimension must be even")
-
-    use_rope :bool = True
-    rope_config:Rope 
-
-
-
-
-        
-        

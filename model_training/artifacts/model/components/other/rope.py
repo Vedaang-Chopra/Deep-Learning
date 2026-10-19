@@ -18,7 +18,7 @@ class RotaryPositionEmbedding(nn.Module):
         
         # Register precomputed non-persistent cosine and sine tables here.
         ## here we use register_buffer for non trainable values
-        freq = self.precompute_theta_pos(self.head_dim, self.max_seq_len, self.theta)
+        freq = self.precompute_theta_pos(self.head_dim, self.context_len, self.theta)
         
         self.register_buffer("cos_emb", freq.cos(), persistent=False)
         self.register_buffer("sin_emb", freq.sin(), persistent=False)
