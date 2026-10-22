@@ -3,6 +3,8 @@ import torch
 import math
 import torch.nn as nn
 from torch.nn import functional as F
+
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import GPT2LMHeadModel
 
 from model_training.artifacts.model.components.block.gpt2_block import Block
@@ -108,6 +110,7 @@ class GPT(nn.Module):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
             
             
+
 
 def return_model(model_name):
     model = AutoModelForCausalLM.from_pretrained(model_name)
