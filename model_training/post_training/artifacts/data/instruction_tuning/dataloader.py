@@ -1,5 +1,7 @@
+from functools import partial
+
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset
 
 
 
@@ -88,4 +90,58 @@ def custom_collate_fn(
     targets_tensor = torch.stack(targets_lst)
         
     return inputs_tensor, targets_tensor
+
+
+class CyclingDataLoader:
+    """Adapt a regular DataLoader to train.py's next_batch interface."""
+
+    def __init__(self, loader, seq_len):
+        self.loader = loader
+        self.iterator = iter(loader)
+        self.batch_size = loader.batch_size
+        self.seq_len = seq_len
+
+    def __iter__(self):
+        # A normal for-loop traverses one finite pass through the DataLoader.
+        return iter(self.loader)
+
+    def next_batch(self):
+        try:
+            return next(self.iterator)
+        except StopIteration:
+            self.iterator = iter(self.loader)
+            return next(self.iterator)
+
+
+def create_instruction_dataloader(
+    dataset,
+    batch_size,
+    pad_token_id=None,
+    seq_len=None,
+    shuffle=True,
+    drop_last=True,
+    num_workers=0,
+    collate_fn=None,
+):
+    """Build the instruction DataLoader in the format expected by train.py."""
+    if collate_fn is None:
+        if pad_token_id is None or seq_len is None:
+            raise ValueError(
+                "Provide collate_fn, or provide both pad_token_id and seq_len."
+            )
+        collate_fn = partial(
+            custom_collate_fn,
+            pad_token_id=pad_token_id,
+            allowed_max_length=seq_len,
+        )
+
+    loader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        collate_fn=collate_fn,
+        shuffle=shuffle,
+        drop_last=drop_last,
+        num_workers=num_workers,
+    )
+    return CyclingDataLoader(loader, seq_len=seq_len)
 

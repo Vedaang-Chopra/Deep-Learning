@@ -108,3 +108,7 @@ class GPT(nn.Module):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
             
             
+
+def return_model(model_name):
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+    return model

@@ -2,12 +2,41 @@ import torch
 
 
 
+def extract_loss_logits(model_output):
+    """Normalize local GPT and Hugging Face outputs to ``(loss, logits)``."""
+    loss = getattr(model_output, "loss", None)
+    logits = getattr(model_output, "logits", None)
+
+    if isinstance(model_output, dict):
+        loss = model_output.get("loss", loss)
+        logits = model_output.get("logits", logits)
+    elif torch.is_tensor(model_output):
+        logits = model_output
+    elif isinstance(model_output, (tuple, list)):
+        # The local model returns (loss, logits). Hugging Face tuple mode
+        # returns logits first without labels, and loss then logits with labels.
+        for value in model_output:
+            if torch.is_tensor(value):
+                if value.ndim == 3 and logits is None:
+                    logits = value
+                elif value.ndim == 0 and loss is None:
+                    loss = value
+
+    if logits is None or not torch.is_tensor(logits) or logits.ndim != 3:
+        raise TypeError(
+            "Expected model output to contain rank-3 logits as `.logits`, "
+            "a `logits` mapping entry, or a tensor in its output tuple."
+        )
+
+    return loss, logits
+
+
 def generate_prob(token_input, context_len, model):
     
     ## Cropping for context Length
     idx_cropped = token_input[:, -context_len:]
     with torch.no_grad():
-        loss, logits = model(idx_cropped)
+        _, logits = extract_loss_logits(model(idx_cropped))
     ## Focus only on the last time step
     ## (Batch, n_tokens, vocab_size) -> (batch, vocab_size)
     logits = logits[:, -1, :]

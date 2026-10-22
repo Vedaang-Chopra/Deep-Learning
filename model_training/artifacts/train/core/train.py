@@ -12,6 +12,9 @@ import time
 def train_model(model, train_components, train_config):
     
     
+    if train_config.accumulation_steps < 1:
+        raise ValueError("train_config.accumulation_steps must be at least 1")
+
     print(f"Current Device: {train_config.device}")
     model.train()
     print(f"Model set to Training mode:{model.training}")
@@ -28,7 +31,7 @@ def train_model(model, train_components, train_config):
         ### Step-1: - Zero the Gradients in Training 
         train_components.optimizer.zero_grad()
         
-        ### Adding Gradient Accumulation -> Due to GPU limits, we can't fit all data in one GPU, so we do multiple forward and backward and then do weight update after some data is processed. 
+        ### Adding Gradient Accumulation -> Due to GPU limits, we can't fit all data in one GPU, so we do multiple forward and backward and then do one update after some data is processed. 
         ## Some data is batch size, so in One Batch -> Do multiple forward and backward pass and then do one update. We want Batch Size to be High, but due to GPU limit we can't do that
         
         
@@ -41,12 +44,21 @@ def train_model(model, train_components, train_config):
             
             ## Step-3a: - Do the Forward Pass
             with torch.autocast(device_type= train_config.device, dtype=torch.bfloat16):
-                loss , logits= model(x, y)
-                # code.interact(local=locals())
+                model_output = model(x)
+                if hasattr(model_output, "logits"):
+                    logits = model_output.logits  # Hugging Face output
+                else:
+                    _, logits = model_output      # Local GPT returns (loss, logits)
+                loss = F.cross_entropy(
+                    logits.reshape(-1, logits.size(-1)),
+                    y.reshape(-1),
+                    ignore_index=-100,
+                )
             
             ## Here since we do multiple forward backward, we need to do proper average over all steps. 
             loss = loss / train_config.accumulation_steps
             loss_accum += loss.detach()
+            
             
             ## Step-3b: - Send the Loss backward
             loss.backward()
@@ -75,7 +87,7 @@ def train_model(model, train_components, train_config):
         end_time = time.time()
         dt = (end_time-start_time)*1000
         
-        tokens_per_second = (train_components.dataloader.batch_size * train_components.dataloader.seq_len * train_config.accumulation_steps) / (end_time-start_time)
+        tokens_per_second = (train_components.dataloader.batch_size * train_config.seq_length * train_config.accumulation_steps) / (end_time-start_time)
         
         print(f"""step { step } | loss: {loss_accum.item():.6f} | norm :{norm:.2f} | dt: {dt:.2f} ms | tok/sec:{tokens_per_second:.2f}""")
         
