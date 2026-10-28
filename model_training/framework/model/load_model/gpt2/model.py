@@ -7,7 +7,7 @@ from torch.nn import functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import GPT2LMHeadModel
 
-from model_training.artifacts.model.components.block.gpt2_block import Block
+from model_training.framework.model.components.block.gpt2_block import Block
 
 
 class GPT(nn.Module):

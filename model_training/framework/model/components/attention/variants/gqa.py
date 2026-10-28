@@ -1,12 +1,14 @@
 
 import torch
 import torch.nn as nn
-
-from model_training.artifacts.model.components.other.rope import RotaryPositionEmbedding
-from model_training.artifacts.model.components.attention.config import TransformerConfig
+from torch.nn import functional as F
 
 
-class MultiHeadQueryAttention(nn.Module):
+from model_training.framework.model.components.other.rope import RotaryPositionEmbedding
+from model_training.framework.model.components.attention.config import TransformerConfig
+
+
+class GroupedQueryAttention(nn.Module):
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__()
         config.validate()
@@ -14,7 +16,8 @@ class MultiHeadQueryAttention(nn.Module):
         self.config = config
         self.head_dim = config.d_model // config.n_heads
         
-        assert config.n_kv_heads !=1   "Number of KV heads is not 1 "
+        assert config.n_heads % config.n_kv_heads == 0, "Number of query heads must be divisible by KV heads"
+        
         
         self.q_proj = nn.Linear(config.d_model, config.n_heads * self.head_dim, bias=False)
         self.k_proj = nn.Linear(config.d_model, config.n_kv_heads * self.head_dim, bias=False)
@@ -109,7 +112,8 @@ class MultiHeadQueryAttention(nn.Module):
         
         
         ## Step-6:- Concat all heads
-        out = out.transpose(1,2).contiguous().view(B, S, D)
+        out = out.transpose(1, 2).contiguous()
+        out = out.view(batch_size, context_len, embd_dim)
         
         ## Step-7: - Pass through output proj and dropout layer
         out = self.o_proj(out) 

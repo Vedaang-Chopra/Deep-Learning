@@ -5,8 +5,8 @@ from typing import TypeAlias
 from torch.nn import functional as F
 
 
-from model_training.artifacts.model.components.other.rope import RotaryPositionEmbedding
-from model_training.artifacts.model.components.attention.config import TransformerConfig
+from model_training.framework.model.components.other.rope import RotaryPositionEmbedding
+from model_training.framework.model.components.attention.config import TransformerConfig
 
 KVCache: TypeAlias = tuple[torch.Tensor, torch.Tensor]
 

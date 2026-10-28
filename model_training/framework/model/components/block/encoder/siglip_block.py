@@ -6,15 +6,15 @@ import torch.nn as nn
 
 
 from typing import Tuple
-from model_training.artifacts.model.components.block.encoder.ve_config import SiglipVisionConfig
+from model_training.framework.model.components.block.encoder.ve_config import SiglipVisionConfig
 
 
-from model_training.artifacts.model.components.attention.mha import MultiHeadAttention as SiglipAttention
+from model_training.framework.model.components.attention.mha import MultiHeadAttention as SiglipAttention
 
 
-from model_training.artifacts.model.components.ffn.siglip_ffn import SiglipMLP
+from model_training.framework.model.components.ffn.siglip_ffn import SiglipMLP
 
-from model_training.artifacts.model.components.attention.config import TransformerConfig
+from model_training.framework.model.components.attention.config import TransformerConfig
 
 '''Embedding -> Attention -> FFn -> Layer norm'''
 class SiglipEncoderLayer(nn.Module):

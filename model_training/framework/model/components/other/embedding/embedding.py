@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from typing import Tuple
 
-from model_training.artifacts.model.components.block.encoder.ve_config import SiglipVisionConfig
+from model_training.framework.model.components.block.encoder.ve_config import SiglipVisionConfig
 
 
 

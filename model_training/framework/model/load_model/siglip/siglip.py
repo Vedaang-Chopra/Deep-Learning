@@ -3,14 +3,14 @@ import torch.nn as nn
 
 from typing import Tuple
 
-from model_training.artifacts.model.components.block.encoder.ve_config import SiglipVisionConfig
+from model_training.framework.model.components.block.encoder.ve_config import SiglipVisionConfig
 
 
 
-from model_training.artifacts.model.components.other.embedding.embedding import SiglipEmbedding
+from model_training.framework.model.components.other.embedding.embedding import SiglipEmbedding
 
 
-from model_training.artifacts.model.components.block.encoder.siglip_block import SiglipEncoder
+from model_training.framework.model.components.block.encoder.siglip_block import SiglipEncoder
 
 
 
