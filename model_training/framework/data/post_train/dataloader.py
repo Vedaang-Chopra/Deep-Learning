@@ -26,10 +26,8 @@ class InstructionDataset(Dataset):
         ## Step-1: - Encoded data
         self.encoded_texts = []
         for entry in range(0, len(self.data)):
-            full_text = prompt_style.complete_response(instruction=self.data[entry]['instruction'], 
-                                                    in_text=self.data[entry]['input'], 
-                                                    out_text=self.data[entry]['output'])
             
+            full_text = prompt_style.preview(self.data[entry])
             self.encoded_texts.append(tokenizer.encode(full_text))
             
         

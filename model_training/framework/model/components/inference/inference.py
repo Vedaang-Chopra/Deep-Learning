@@ -46,7 +46,7 @@ def generate_prob(token_input, context_len, model):
 
 def gen_argmax(model, input_batch, max_new_tokens, context_len):
     
-    while input_batch.size(1) < max_new_tokens:
+    for _ in range(max_new_tokens):
         probs = generate_prob(input_batch, context_len, model)    
         next_token = torch.argmax(probs, dim=-1, keepdim = True)    
         input_batch = torch.cat((input_batch, next_token), dim=1)
@@ -56,9 +56,9 @@ def gen_argmax(model, input_batch, max_new_tokens, context_len):
 
 def gen_sample(model, input_batch, max_new_tokens, context_len):
     
-    while input_batch.size(1) < max_new_tokens:
+    for _ in range(max_new_tokens):
             probs = generate_prob(input_batch, context_len, model)    
-            topk_probs , topk_indices = torch.topk(probs, 50, dim=-1)
+            topk_probs , topk_indices = torch.topk(probs, min(50, probs.size(-1)), dim=-1)
             next_token = torch.multinomial(topk_probs, num_samples = 1)
             xcol = torch.gather(topk_indices, -1, next_token)
             input_batch = torch.cat((input_batch, xcol), dim=1)

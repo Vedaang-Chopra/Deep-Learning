@@ -43,7 +43,9 @@ def train_model(model, train_components, train_config):
             y = y.to(train_config.device)
             
             ## Step-3a: - Do the Forward Pass
-            with torch.autocast(device_type= train_config.device, dtype=torch.bfloat16):
+            device_type = torch.device(train_config.device).type
+            precision = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(train_config.precision)
+            with torch.autocast(device_type=device_type, dtype=precision, enabled=precision is not None):
                 model_output = model(x)
                 if hasattr(model_output, "logits"):
                     logits = model_output.logits  # Hugging Face output
@@ -81,7 +83,8 @@ def train_model(model, train_components, train_config):
         train_components.optimizer.step() 
         
         
-        torch.cuda.synchronize() ### Wait for it to finish a batch
+        if torch.device(train_config.device).type == "cuda":
+            torch.cuda.synchronize(train_config.device)
         
         
         end_time = time.time()

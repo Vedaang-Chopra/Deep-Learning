@@ -2,10 +2,14 @@
 import torch
 
 
-def text_to_token_ids(text, tokenizer, allowed_special):
+def tiktoken_text_to_token_ids(text, tokenizer, allowed_special):
     encoded = tokenizer.encode(text, allowed_special=allowed_special)
     encoded_tensor = torch.tensor(encoded).unsqueeze(0)  # add batch dimension
     return encoded_tensor
+
+def text_to_token_ids(text, tokenizer):
+    in_tokens = tokenizer(text, return_tensors="pt")["input_ids"]
+    return in_tokens
 
 
 def token_ids_to_text(tokens, tokenizer):

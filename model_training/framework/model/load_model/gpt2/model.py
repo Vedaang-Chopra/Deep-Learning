@@ -7,7 +7,28 @@ from torch.nn import functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers import GPT2LMHeadModel
 
-from model_training.framework.model.components.block.gpt2_block import Block
+from model_training.framework.model.components.attention.self_attn import FlashCausalSelfAttention
+from model_training.framework.model.components.ffn.gpt2_ffn import MLP
+
+
+
+class Block(nn.Module):
+    
+    def __init__(self, config, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = config
+        
+        self.ln_1 = nn.LayerNorm(config.emb_dim)
+        self.attn = FlashCausalSelfAttention(config)
+        self.ln_2 = nn.LayerNorm(config.emb_dim)
+        self.mlp = MLP (config)
+    
+    def forward(self, x):
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
+        return x    
+    
+
 
 
 class GPT(nn.Module):
@@ -35,45 +56,41 @@ class GPT(nn.Module):
         
         ## The Final Linear is same as Embedding Layer -> Weight Sharing Scheme
         self.transformer.wte.weight = self.lm_head.weight
-    @classmethod
-    def from_pretrained(self, load_config, model_type):
-        """Loads pre trained weights from huggingface"""
-        
-        model = GPT(load_config)
-        
-        sd = model.state_dict()
-        # print(sd.keys())
-        sd_keys = sd.keys()
-        sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias')]
-        
-        
-        model_hf = GPT2LMHeadModel.from_pretrained(model_type)
-        sd_hf = model_hf.state_dict()
-        
-        sd_keys_hf = sd_hf.keys()
-        
-        sd_keys_hf = [k for k in sd_keys_hf if not k.endswith('.attn.masked_bias')] # ignore these, just a buffer
-        sd_keys_hf = [k for k in sd_keys_hf if not k.endswith('.attn.bias')] # same, just the mask (buffer)
-        
-        transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
-        # basically the openai checkpoints use a "Conv1D" module, but we only want to use a vanilla Linear
-        # this means that we have to transpose these weights when we import them
-        assert len(sd_keys_hf) == len(sd_keys), f"mismatched keys: {len(sd_keys_hf)} != {len(sd_keys)}"
-        
-        for k in sd_keys_hf:
-            if any(k.endswith(w) for w in transposed):
-                # special treatment for the Conv1D weights we need to transpose
-                assert sd_hf[k].shape[::-1] == sd[k].shape
-                with torch.no_grad():
-                    sd[k].copy_(sd_hf[k].t())
-            else:
-                # vanilla copy over the other parameters
-                assert sd_hf[k].shape == sd[k].shape
-                with torch.no_grad():
-                    sd[k].copy_(sd_hf[k])
-
-        return model
     
+    def use_pretrained(self, hf_model: nn.Module) -> "GPT":
+        """Copy a compatible Hugging Face GPT-2 model, transposing Conv1D weights."""
+        hf_config = hf_model.config
+        expected = (self.config.vocab_size, self.config.context_len, self.config.emb_dim,
+                    self.config.n_layer, self.config.n_head)
+        actual = (hf_config.vocab_size, hf_config.n_positions, hf_config.n_embd,
+                  hf_config.n_layer, hf_config.n_head)
+        if actual != expected:
+            raise ValueError(f"GPT-2 configuration mismatch: expected {expected}, got {actual}")
+        if not hf_config.tie_word_embeddings:
+            raise ValueError("GPT-2 requires tied token embeddings and output weights")
+        source = hf_model.state_dict()
+        target = self.state_dict()
+        names = [name for name in target if not name.endswith(".attn.bias")]
+        source_names = {name for name in source if not name.endswith((".attn.bias", ".attn.masked_bias"))}
+        if set(names) != source_names:
+            raise ValueError(f"GPT-2 state keys differ: missing={set(names) - source_names}, unexpected={source_names - set(names)}")
+        transposed = ("attn.c_attn.weight", "attn.c_proj.weight", "mlp.c_fc.weight", "mlp.c_proj.weight")
+        with torch.no_grad():
+            for name in names:
+                value = source[name].t() if name.endswith(transposed) else source[name]
+                if value.shape != target[name].shape:
+                    raise ValueError(f"shape mismatch for {name}: {value.shape} != {target[name].shape}")
+                target[name].copy_(value)
+        return self
+
+    @classmethod
+    def from_pretrained(cls, load_config, model_type):
+        """Load a named Hugging Face GPT-2 checkpoint into a matching configuration."""
+        model_type = {"gpt2-small": "gpt2"}.get(model_type, model_type)
+        if model_type not in {"gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl"}:
+            raise ValueError(f"Unsupported GPT-2 checkpoint: {model_type}")
+        return cls(load_config).use_pretrained(GPT2LMHeadModel.from_pretrained(model_type))
+
     def forward(self, idx, targets =None):
         B, T = idx.size()
         

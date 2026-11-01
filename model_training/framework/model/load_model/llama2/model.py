@@ -10,7 +10,7 @@ from model_training.framework.model.components.ffn.gpt2_ffn import MLP
 
 
 
-class TransformerBlock(nn.Module):
+class LLama2Block(nn.Module):
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__()
         self.attn_norm = RMSNorm(config.d_model, config.rms_eps)
