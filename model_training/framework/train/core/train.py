@@ -9,7 +9,7 @@ import time
 
 
 
-def train_model(model, train_components, train_config):
+def train_model(model, train_components, train_config, logger=None):
     
     
     if train_config.accumulation_steps < 1:
@@ -96,6 +96,17 @@ def train_model(model, train_components, train_config):
         
         # Log the details
         # train_config.log()
+        if logger is not None:
+            logger.log(
+        {
+            "train/loss": loss_accum.item(),
+            "train/grad_norm": norm.item(),
+            "train/lr": lr,
+            "train/tokens_per_sec": tokens_per_second,
+            "train/step_ms": dt,
+        },
+        step=step,
+    )
     return model
 
 
