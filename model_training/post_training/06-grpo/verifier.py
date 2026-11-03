@@ -1,5 +1,6 @@
 import logging
 import re
+from decimal import Decimal
 from typing import Sequence
 
 import torch
@@ -20,17 +21,18 @@ def extract_gold_answer(answer: str) -> int:
     return int(value.replace(",", ""))
 
 
-def extract_prediction(text: str) -> int | None:
-    """Extract an integer from a correctly formatted completion."""
-    match = re.fullmatch(
-        r"FINAL_ANSWER:\s*(-?(?:\d+|\d{1,3}(?:,\d{3})+))",
-        text.strip()
+def extract_prediction(text: str) -> Decimal | None:
+    """Extract the first labeled numeric answer from a completion."""
+    match = re.search(
+        r"FINAL_ANSWER:\s*(-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?![\d,]|\.\d)",
+        text,
+        flags=re.IGNORECASE,
     )
 
     if not match:
         return None
 
-    return int(match.group(1).replace(",", ""))
+    return Decimal(match.group(1).replace(",", ""))
 
 
 
@@ -38,8 +40,8 @@ def extract_prediction(text: str) -> int | None:
 def compute_reward(prediction: str, gold_answer: str) -> float:
     """
     Return:
-        1.0: valid format and numerically correct
-        0.0: incorrect answer or invalid format
+        1.0: labeled answer is numerically correct
+        0.0: incorrect or missing labeled answer
     """
     if extract_prediction(prediction) == extract_gold_answer(gold_answer):
         return 1.0
