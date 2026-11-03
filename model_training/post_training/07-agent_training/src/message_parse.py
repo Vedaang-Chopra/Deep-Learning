@@ -91,8 +91,9 @@ def build_tool_interactions(
                     "message": message,
                     "tool_call": call,
                     "call_id": call_id,
-                    "tool_name": function.get("name"),
-                    "arguments": function.get("arguments"),
+                    "call_type": call.get("type"),
+                    "call_name": function.get("name"),
+                    "call_arguments": function.get("arguments"),
                     "response_message_index": (
                         matches[0][0] if len(matches) == 1 else None
                     ),
