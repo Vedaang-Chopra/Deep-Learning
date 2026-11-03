@@ -1,86 +1,18 @@
-
-
 import logging
-import re
 from typing import Any, Sequence
 
 import torch
 
+from data import prepare_prompt_batch
+from grpo_loss import (
+    completion_token_logprobs,
+    compute_advantages,
+    compute_ratio,
+    grpo_policy_loss,
+)
+from verifier import compute_group_rewards
+
 logger = logging.getLogger(__name__)
-
-
-def make_prompt(question: str) -> str:
-    """Format one GSM8K question for the model."""
-    return (
-        "Solve the following math problem.\n"
-        "Return only the final numerical answer.\n"
-        "Use the format: FINAL_ANSWER: <number>\n\n"
-        f"Question: {question}"
-    )
-
-
-def prepare_prompt_batch(
-    tokenizer: Any,
-    examples: Sequence[dict[str, Any]],
-    device: torch.device,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Tokenize one conversation per example, left-padding the batch."""
-    if not examples:
-        raise ValueError("examples must contain at least one question")
-    tokenizer.padding_side = "left"
-    conversations = [
-        [{"role": "user", "content": make_prompt(example["question"])}]
-        for example in examples
-    ]
-    inputs = tokenizer.apply_chat_template(
-        conversations,
-        tokenize=True,
-        add_generation_prompt=True,
-        enable_thinking=False,
-        padding=True,
-        return_dict=True,
-        return_tensors="pt",
-    )
-    return inputs["input_ids"].to(device), inputs["attention_mask"].to(device)
-
-
-def extract_gold_answer(answer: str) -> int:
-    """Extract the integer following the GSM8K answer delimiter."""
-    value = answer.rsplit("####", 1)[-1].strip()
-
-    if "####" not in answer or not re.fullmatch(
-        r"-?(?:\d+|\d{1,3}(?:,\d{3})+)", value
-    ):
-        raise ValueError(f"Invalid gold answer: {answer!r}")
-
-    return int(value.replace(",", ""))
-
-
-def extract_prediction(text: str) -> int | None:
-    """Extract an integer from a correctly formatted completion."""
-    match = re.fullmatch(
-        r"FINAL_ANSWER:\s*(-?(?:\d+|\d{1,3}(?:,\d{3})+))",
-        text.strip()
-    )
-
-    if not match:
-        return None
-
-    return int(match.group(1).replace(",", ""))
-
-
-
-
-def compute_reward(prediction: str, gold_answer: str) -> float:
-    """
-    Return:
-        1.0: valid format and numerically correct
-        0.0: incorrect answer or invalid format
-    """
-    if extract_prediction(prediction) == extract_gold_answer(gold_answer):
-        return 1.0
-    else:
-        return 0.0
 
 
 def sample_group_completions(
@@ -155,141 +87,6 @@ def sample_group_completions(
     return output_ids, predictions, sequence_attention_mask
 
 
-def compute_group_rewards(
-    predictions: Sequence[str],
-    gold_answers: Sequence[str],
-    group_size: int,
-    device: torch.device,
-) -> torch.Tensor:
-    """Score sampled predictions and return rewards shaped (prompts, group)."""
-    if group_size < 1:
-        raise ValueError("group_size must be at least 1")
-    expected_predictions = len(gold_answers) * group_size
-    if len(predictions) != expected_predictions:
-        raise ValueError(
-            f"Expected {expected_predictions} predictions for "
-            f"{len(gold_answers)} prompts and group_size={group_size}; "
-            f"received {len(predictions)}"
-        )
-
-    logger.debug(
-        "Computing group rewards: prompts=%s group_size=%s",
-        len(gold_answers),
-        group_size,
-    )
-    rewards = [
-        [
-            compute_reward(prediction, gold_answer)
-            for prediction in predictions[
-                prompt_index * group_size:(prompt_index + 1) * group_size
-            ]
-        ]
-        for prompt_index, gold_answer in enumerate(gold_answers)
-    ]
-    reward_tensor = torch.tensor(rewards, dtype=torch.float32, device=device)
-    logger.debug("Computed group rewards with shape %s", tuple(reward_tensor.shape))
-    return reward_tensor
-
-
-def compute_advantages(
-    rewards: torch.Tensor,
-    eps: float = 1e-8
-) -> torch.Tensor:
-    """
-    rewards: (batch_size, group_size)
-    returns: (batch_size, group_size)
-
-    Normalize rewards independently for each prompt.
-    Handle groups with identical rewards.
-    """
-
-    mean = rewards.mean(dim=1, keepdim=True)
-
-    std = rewards.std(dim=1, keepdim=True, correction=0)
-    advantages = (rewards - mean) / (std + eps)
-
-    return advantages
-
-
-def test_advantages(advantages: torch.Tensor, rewards: torch.Tensor) -> None:
-    """Check the original demonstration's expected advantages."""
-
-    assert advantages.shape == rewards.shape
-    assert torch.isfinite(advantages).all()
-    assert torch.allclose(
-        advantages[0],
-        torch.tensor([1., -1., 1., -1.]),
-        atol=1e-5
-    )
-    assert torch.allclose(advantages[1:], torch.zeros_like(advantages[1:]))
-
-
-def completion_token_logprobs(
-    logits: torch.Tensor,
-    token_ids: torch.Tensor,
-    prompt_len: int,
-    attention_mask: torch.Tensor | None = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return log probabilities and a mask for the generated tokens."""
-    B, T = token_ids.shape
-
-    # 1. Shift
-    shifted_logits = logits[:, :-1, :]
-    shifted_labels = token_ids[:, 1:]
-
-    # 2. Log probabilities
-    log_probs = torch.log_softmax(shifted_logits, dim=-1)
-
-    # 3. Select actual token log probabilities
-    token_logps = torch.gather(
-        log_probs,
-        dim=-1,
-        index=shifted_labels.unsqueeze(-1)
-    ).squeeze(-1)
-
-    # 4. Completion mask
-    positions = torch.arange(1, T, device=token_ids.device)
-    mask = positions >= prompt_len
-    mask = mask.unsqueeze(0).expand(B, -1)
-    if attention_mask is not None:
-        mask = mask & attention_mask[:, 1:].bool()
-
-    return token_logps, mask
-
-
-def compute_ratio(
-    current_logps: torch.Tensor,
-    old_logps: torch.Tensor,
-) -> torch.Tensor:
-    """
-    current_logps: (B, T-1)
-    old_logps:     (B, T-1)
-
-    Returns:
-        ratio: (B, T-1)
-    """
-    ratio = torch.exp(
-        current_logps - old_logps.detach()
-    )
-    return ratio
-
-
-def grpo_policy_loss(
-    current_logps: torch.Tensor,
-    old_logps: torch.Tensor,
-    advantages: torch.Tensor,
-    mask: torch.Tensor,
-    eps: float = 0.2,
-) -> torch.Tensor:
-    """Compute the masked, clipped policy loss for sampled completions."""
-    ratio = torch.exp(current_logps.float() - old_logps.detach().float())
-    advantage = advantages.detach().reshape(-1, 1)
-    unclipped = ratio * advantage
-    clipped = torch.clamp(ratio, 1 - eps, 1 + eps) * advantage
-    token_loss = -torch.minimum(unclipped, clipped)
-    return (token_loss * mask).sum() / mask.sum().clamp_min(1)
-
-
 def inspect_grpo_batch(
     model: torch.nn.Module,
     tokenizer: Any,
@@ -306,7 +103,14 @@ def inspect_grpo_batch(
     Records are ordered by example and then completion within that example.
     """
     logger.debug("Inspecting GRPO batch: examples=%s group_size=%s", len(examples), group_size)
+
+
+
+    ## Step-1: - Get the Input Ids and Attention Mask
     input_ids, attention_mask = prepare_prompt_batch(tokenizer, examples, device)
+
+
+    ## Step-2: - Generate the rollouts
     output_ids, predictions, sequence_mask = sample_group_completions(
         model, tokenizer, input_ids, group_size, max_new_tokens, temperature, attention_mask
     )
