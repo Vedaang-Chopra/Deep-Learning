@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from typing import Tuple
 
-from model_training.framework.model.components.block.encoder.ve_config import SiglipVisionConfig
+from model_training.framework.model.load_model.siglip.config import SiglipVisionConfig
 
 
 
@@ -47,6 +47,21 @@ class TokenandPosEmbedding(nn.Module):
             return self.embd_layer
 
 
+
+
+
+class PatchEmbedding(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        
+        ## Step-1: - Isolate Configuration 
+        
+        self.num_channels = config.num_channels
+        self.embed_dim = config.embed_dim
+        self.patch_size =config.patch_size
+        s
+        
+        self.patch_embed = nn.Conv2d(num_channels, embed_dim, kernel_size=patch_size, stride=patch_size)
 
 
 class SiglipEmbedding(nn.Module):

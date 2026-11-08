@@ -1,0 +1,14 @@
+# Install a mutually compatible TRL / Transformers version for your GPU.
+trl>=1.8.0
+transformers>=5.2.0
+datasets>=4.4.0
+accelerate
+peft
+torch
+
+# Trace inspection
+pandas
+rich
+jmespath
+matplotlib
+seaborn

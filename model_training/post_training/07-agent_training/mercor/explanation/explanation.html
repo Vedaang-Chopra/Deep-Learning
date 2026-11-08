@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Post-Train Scheduler Explained</title>
+<style>
+:root{
+  --bg:#fafaf7; --card:#ffffff; --ink:#1d2330; --muted:#5d6577; --line:#e3e1d8;
+  --blue:#2b6cb0; --green:#2f855a; --red:#c53030; --amber:#b7791f; --purple:#6b46c1;
+  --blue-bg:#e6effa; --green-bg:#e3f4ea; --red-bg:#fbe7e7; --amber-bg:#fbf0d9; --purple-bg:#eee8fa;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14171e; --card:#1c212b; --ink:#e8eaf0; --muted:#9aa3b5; --line:#2e3542;
+    --blue:#6aa9ee; --green:#5cc592; --red:#f08080; --amber:#e3b252; --purple:#a98bef;
+    --blue-bg:#1b2a40; --green-bg:#19332a; --red-bg:#3a2222; --amber-bg:#38301a; --purple-bg:#2a2340;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:32px 16px 80px}
+h1{font-size:2rem;line-height:1.2;margin:0 0 6px}
+h2{font-size:1.4rem;margin:48px 0 8px;padding-top:8px}
+h2 .n{display:inline-block;background:var(--blue);color:#fff;border-radius:50%;width:1.7em;height:1.7em;text-align:center;line-height:1.7em;font-size:.8em;margin-right:8px}
+p{margin:8px 0}
+.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.tag{display:inline-block;font-size:.78rem;font-weight:600;padding:2px 9px;border-radius:99px}
+.t-blue{background:var(--blue-bg);color:var(--blue)} .t-green{background:var(--green-bg);color:var(--green)}
+.t-red{background:var(--red-bg);color:var(--red)} .t-amber{background:var(--amber-bg);color:var(--amber)}
+.t-purple{background:var(--purple-bg);color:var(--purple)}
+.big{font-size:2.1rem;font-weight:700;line-height:1.1}
+.muted{color:var(--muted)} .small{font-size:.88rem}
+svg{max-width:100%;height:auto;display:block}
+svg text{fill:var(--ink);font-family:inherit}
+.bar-row{display:grid;grid-template-columns:130px 1fr 54px;gap:10px;align-items:center;margin:8px 0}
+.bar{height:22px;border-radius:5px;background:var(--line);overflow:hidden}
+.bar>i{display:block;height:100%}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.step{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;position:relative}
+.step b{display:block;margin-bottom:2px}
+.step .num{position:absolute;top:-10px;left:-8px;background:var(--blue);color:#fff;width:24px;height:24px;border-radius:50%;text-align:center;font-size:.8rem;line-height:24px;font-weight:700}
+input[type=range]{width:100%;accent-color:var(--blue)}
+table{border-collapse:collapse;width:100%;font-size:.93rem}
+th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left}
+th{color:var(--muted);font-weight:600}
+code{background:var(--blue-bg);color:var(--blue);padding:1px 6px;border-radius:5px;font-size:.88em}
+.callout{border-left:4px solid var(--amber);background:var(--amber-bg);padding:10px 14px;border-radius:0 8px 8px 0;margin:14px 0}
+.dots{display:flex;gap:5px;flex-wrap:wrap;margin:8px 0}
+.dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;color:#fff}
+.dot.p{background:var(--green)} .dot.f{background:var(--red)}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+nav a{font-size:.85rem;color:var(--blue);text-decoration:none;border:1px solid var(--line);padding:3px 10px;border-radius:99px;background:var(--card)}
+</style>
+</head>
+<body>
+<main>
+
+<h1>How We Pick Homework for the AI Student</h1>
+<p class="sub">The Post-Train scheduler project, explained with a student and a teacher.</p>
+<nav>
+  <a href="#story">Story</a><a href="#rule">Learning rule</a><a href="#baseline">Baseline</a>
+  <a href="#idea">My idea</a><a href="#poison">Poison</a><a href="#code">Code</a>
+  <a href="#results">Results</a><a href="#limits">Limits</a>
+</nav>
+
+<!-- 1 -->
+<h2 id="story"><span class="n">1</span>The story</h2>
+<div class="card">
+  <svg viewBox="0 0 760 210" role="img" aria-label="Teacher picks questions for a student with five subjects">
+    <rect x="10" y="20" width="150" height="150" rx="14" fill="var(--blue-bg)" stroke="var(--blue)"/>
+    <text x="85" y="55" text-anchor="middle" font-size="34">🧑‍🏫</text>
+    <text x="85" y="88" text-anchor="middle" font-weight="700" font-size="15">Teacher</text>
+    <text x="85" y="110" text-anchor="middle" font-size="12" class="m">= our scheduler</text>
+    <text x="85" y="140" text-anchor="middle" font-size="12">5,760 tries</text>
+
+    <rect x="250" y="20" width="250" height="150" rx="14" fill="var(--card)" stroke="var(--line)"/>
+    <text x="375" y="46" text-anchor="middle" font-weight="700" font-size="14">120 homework questions</text>
+    <g font-size="11">
+      <rect x="268" y="60" width="64" height="26" rx="6" fill="var(--amber-bg)"/><text x="300" y="77" text-anchor="middle">coding</text>
+      <rect x="342" y="60" width="64" height="26" rx="6" fill="var(--green-bg)"/><text x="374" y="77" text-anchor="middle">math+plan</text>
+      <rect x="416" y="60" width="64" height="26" rx="6" fill="var(--purple-bg)"/><text x="448" y="77" text-anchor="middle">tool_use</text>
+      <rect x="268" y="96" width="64" height="26" rx="6" fill="var(--blue-bg)"/><text x="300" y="113" text-anchor="middle">reasoning</text>
+      <rect x="342" y="96" width="64" height="26" rx="6" fill="var(--amber-bg)"/><text x="374" y="113" text-anchor="middle">coding+math</text>
+      <rect x="416" y="96" width="64" height="26" rx="6" fill="var(--card)" stroke="var(--line)"/><text x="448" y="113" text-anchor="middle">…</text>
+    </g>
+    <text x="375" y="150" text-anchor="middle" font-size="12" fill="var(--muted)">difficulty hidden from teacher</text>
+
+    <rect x="590" y="20" width="160" height="150" rx="14" fill="var(--green-bg)" stroke="var(--green)"/>
+    <text x="670" y="55" text-anchor="middle" font-size="34">🎓</text>
+    <text x="670" y="88" text-anchor="middle" font-weight="700" font-size="15">Student</text>
+    <text x="670" y="110" text-anchor="middle" font-size="12">5 skills, 0 to 1</text>
+    <text x="670" y="130" text-anchor="middle" font-size="11">planning · coding · reasoning</text>
+    <text x="670" y="146" text-anchor="middle" font-size="11">tool_use · math</text>
+
+    <path d="M160 95 H250" stroke="var(--ink)" stroke-width="2" marker-end="url(#a)"/>
+    <path d="M500 95 H590" stroke="var(--ink)" stroke-width="2" marker-end="url(#a)"/>
+    <text x="205" y="86" text-anchor="middle" font-size="11">picks</text>
+    <text x="545" y="86" text-anchor="middle" font-size="11">1 try</text>
+    <path d="M670 172 V196 H85 V172" stroke="var(--muted)" stroke-width="1.5" fill="none" stroke-dasharray="5 4" marker-end="url(#a)"/>
+    <text x="375" y="190" text-anchor="middle" font-size="11" fill="var(--muted)">pass or fail comes back</text>
+    <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--ink)"/></marker></defs>
+  </svg>
+  <p><b>Goal:</b> after 5,760 tries, the student should pass as many questions as possible on a <b>secret exam</b> the teacher never sees.</p>
+  <p class="small muted">Real world: student = AI model, try = one costly rollout, teacher = the scheduler we wrote.</p>
+</div>
+
+<div class="grid">
+  <div class="card"><span class="tag t-green">Teacher knows</span>
+    <ul class="small"><li>The question list</li><li>Which subjects each uses</li><li>The learning rule</li><li>Pass or fail of each try</li></ul></div>
+  <div class="card"><span class="tag t-red">Teacher does not know</span>
+    <ul class="small"><li>How hard each question is</li><li>The student's real skill</li><li>Which questions are poison</li><li>The exam</li></ul></div>
+</div>
+
+<!-- 2 -->
+<h2 id="rule"><span class="n">2</span>The one rule that matters</h2>
+<p>Tries come in <b>groups of 8</b> on one question. The student only learns when the 8 results <b>disagree</b>.</p>
+
+<div class="grid">
+  <div class="card"><span class="tag t-amber">All 8 pass</span>
+    <div class="dots"><span class="dot p">✓</span><span class="dot p">✓</span><span class="dot p">✓</span><span class="dot p">✓</span><span class="dot p">✓</span><span class="dot p">✓</span><span class="dot p">✓</span><span class="dot p">✓</span></div>
+    <p class="small">Too easy. <b>Learns nothing.</b></p></div>
+  <div class="card"><span class="tag t-amber">All 8 fail</span>
+    <div class="dots"><span class="dot f">✗</span><span class="dot f">✗</span><span class="dot f">✗</span><span class="dot f">✗</span><span class="dot f">✗</span><span class="dot f">✗</span><span class="dot f">✗</span><span class="dot f">✗</span></div>
+    <p class="small">Too hard. <b>Learns nothing.</b></p></div>
+  <div class="card"><span class="tag t-green">Mixed</span>
+    <div class="dots"><span class="dot p">✓</span><span class="dot f">✗</span><span class="dot p">✓</span><span class="dot f">✗</span><span class="dot f">✗</span><span class="dot p">✓</span><span class="dot p">✓</span><span class="dot f">✗</span></div>
+    <p class="small">Just right. <b>Learns a lot.</b></p></div>
+</div>
+
+<div class="card">
+  <b>Try it: how much is learned?</b> <span class="muted small">(spread = k × (8 − k) / 64)</span>
+  <input id="k" type="range" min="0" max="8" value="4">
+  <div id="kdots" class="dots"></div>
+  <svg viewBox="0 0 520 170" id="spreadchart" role="img" aria-label="Learning amount versus passes"></svg>
+  <p id="ktext" class="small"></p>
+</div>
+
+<div class="card">
+  <b>How hard is a question?</b> Chance to pass depends on skill vs difficulty.
+  <input id="skill" type="range" min="0" max="100" value="45">
+  <svg viewBox="0 0 520 190" id="scurve" role="img" aria-label="Pass chance curve"></svg>
+  <p id="stext" class="small"></p>
+  <p class="small muted">Difficulty here is fixed at 0.55. If skill equals difficulty, the chance is 95%. The S-shape is steep (slope 6).</p>
+</div>
+
+<div class="callout">Learning lands on the student only every <b>60 tries</b> (a "cadence" boundary). Gains shrink as skill nears 1: <code>skill += credit × (1 − skill)</code>.</div>
+
+<!-- 3 -->
+<h2 id="baseline"><span class="n">3</span>The baseline teacher</h2>
+<p>It gives every question exactly 3 groups, in order, then repeats. No thinking.</p>
+<div class="card">
+  <div class="grid">
+    <div><div class="big" style="color:var(--red)">52%</div><div class="small muted">of the budget (3,016 of 5,760 tries) went into groups where all 8 agreed</div></div>
+    <div><div class="big">343 / 720</div><div class="small muted">groups taught anything</div></div>
+  </div>
+  <svg viewBox="0 0 560 190" id="passchart" role="img" aria-label="Group results per pass over the bank" style="margin-top:12px"></svg>
+  <p class="small muted">Each bar is one sweep over the 120 questions. The orange "all pass" block grows: the student already knows those. Red "all fail" never fully goes away: too hard for now. Only the green middle teaches.</p>
+</div>
+
+<!-- 4 -->
+<h2 id="idea"><span class="n">4</span>My idea: pick what teaches the most</h2>
+<div class="flow">
+  <div class="step"><span class="num">1</span><b>Guess difficulty</b><span class="small">Each question keeps probabilities over its possible hardness. Updated after every group.</span></div>
+  <div class="step"><span class="num">2</span><b>Guess the student</b><span class="small">Replay the public learning rule to track skill. Start at 0.30.</span></div>
+  <div class="step"><span class="num">3</span><b>Score each question</b><span class="small">chance of a mixed result × room left to improve</span></div>
+  <div class="step"><span class="num">4</span><b>Give one group of 8</b><span class="small">Highest score wins. Then go back to step 1.</span></div>
+</div>
+
+<div class="card">
+  <b>How the guess about one question narrows</b>
+  <svg viewBox="0 0 560 170" id="posterior" role="img" aria-label="Difficulty guess narrows with evidence"></svg>
+  <p class="small muted">Grey: before any tries, any difficulty is possible. Blue: after a few groups, the guess clusters near the true value. A question that keeps failing is not thrown away: its score is recomputed as the student's skill rises, so it comes back.</p>
+</div>
+
+<div class="grid">
+  <div class="card"><span class="tag t-green">Gets a high score</span><p class="small">Student passes about half the time, and the subjects it trains still have room to grow.</p></div>
+  <div class="card"><span class="tag t-red">Gets a low score</span><p class="small">Already mastered, far too hard right now, or trains a subject that is nearly maxed out.</p></div>
+</div>
+
+<!-- 5 -->
+<h2 id="poison"><span class="n">5</span>Part 2: poison questions</h2>
+<p>Some questions work <b>backwards</b>: they lower the student's skill. Nothing marks them. The bank may have none, or some, and we are not told.</p>
+
+<div class="card">
+  <b>The trick: look at the trend, not one group.</b>
+  <svg viewBox="0 0 560 210" id="trend" role="img" aria-label="Clean question gets easier, poison gets harder"></svg>
+  <p class="small">Inside one group, poison looks normal. Over time a <span class="tag t-green">clean</span> question gets easier as the student trains on it. A <span class="tag t-red">poison</span> question gets harder, because the student is getting worse.</p>
+</div>
+
+<div class="flow">
+  <div class="step"><span class="num">1</span><b>Two stories</b><span class="small">Every question keeps "clean" and "poison" models side by side.</span></div>
+  <div class="step"><span class="num">2</span><b>Compare</b><span class="small">Which story explains the pass/fail history better? That gives a poison chance.</span></div>
+  <div class="step"><span class="num">3</span><b>Charge for risk</b><span class="small">Value is cut by the poison chance. High chance means negative value.</span></div>
+  <div class="step"><span class="num">4</span><b>Go slow on new ones</b><span class="small">An unchecked question gets 1 group per 60-try window, since the effect only lands at the window end.</span></div>
+</div>
+<div class="callout">The bank-wide poison rate is also estimated. On a clean bank it drops, so the teacher stops being scared. The cost of Part 2: some budget is spent testing safety.</div>
+
+<!-- 6 -->
+<h2 id="code"><span class="n">6</span>Where things live</h2>
+<div class="card">
+  <svg viewBox="0 0 640 250" role="img" aria-label="Code layers">
+    <g font-size="13">
+      <rect x="10" y="10" width="620" height="40" rx="8" fill="var(--purple-bg)" stroke="var(--purple)"/>
+      <text x="24" y="35"><tspan font-weight="700">Notebooks</tspan>  01, 02, 03: only look, no real logic</text>
+      <rect x="40" y="60" width="560" height="40" rx="8" fill="var(--blue-bg)" stroke="var(--blue)"/>
+      <text x="54" y="85"><tspan font-weight="700">bin/train, bin/check</tspan>  given, run the loop: choose → try → observe</text>
+      <rect x="70" y="110" width="500" height="40" rx="8" fill="var(--green-bg)" stroke="var(--green)"/>
+      <text x="84" y="135"><tspan font-weight="700">curriculum/__init__.py</tspan>  Scheduler (Part 1), PoisonScheduler (Part 2)</text>
+      <rect x="100" y="160" width="440" height="40" rx="8" fill="var(--amber-bg)" stroke="var(--amber)"/>
+      <text x="114" y="185"><tspan font-weight="700">curriculum/skill_model.py</tspan>  TaskModel, SkillTracker, SignedTask</text>
+      <rect x="130" y="210" width="380" height="32" rx="8" fill="var(--card)" stroke="var(--line)"/>
+      <text x="144" y="231">gymsim.py  the simulator (given, never read by the scheduler)</text>
+    </g>
+  </svg>
+  <p class="small"><b>Dev only (never imported by the scheduler):</b> <code>tests/test_scheduler.py</code> (12 tests), <code>local_scoring.py</code> (stand-in exam).</p>
+</div>
+
+<div class="card">
+  <b>One turn of the loop</b>
+  <div class="flow" style="margin-top:12px">
+    <div class="step"><b>choose()</b><span class="small">Group done? Pick the best question. Hand out one try.</span></div>
+    <div class="step"><b>simulator</b><span class="small">Runs the try. Returns pass or fail.</span></div>
+    <div class="step"><b>observe()</b><span class="small">Count it. At 8 tries, close the group, update the guess. Every 60 tries, land the credit.</span></div>
+  </div>
+  <p class="small muted">Only changed questions are re-scored, so cost per call stays flat as history grows. Grading needs that.</p>
+</div>
+
+<!-- 7 -->
+<h2 id="results"><span class="n">7</span>Does it work?</h2>
+<p><span class="tag t-amber">Proxy score</span> <span class="small muted">My own stand-in exam on 4 fresh banks. Not the graded score.</span></p>
+<div class="card" id="scores"></div>
+
+<div class="grid">
+  <div class="card"><div class="big" style="color:var(--green)">12 / 12</div><div class="small muted">unit tests pass</div></div>
+  <div class="card"><div class="big" style="color:var(--green)">5 / 5</div><div class="small muted">./bin/check items pass: imports, budget and speed, train, spends budget, reproducible</div></div>
+</div>
+
+<div class="card">
+  <b>The last edit</b> (commit <code>578bf6e</code>)
+  <pre style="margin:8px 0;overflow:auto;font-size:.85rem"><span style="color:var(--red)">- self.tracker.prof[skill] = min(1.0, max(0.0, value))</span>
+<span style="color:var(--green)">+ self.tracker.prof[skill] = min(1.0, value)</span></pre>
+  <p class="small">The real simulator lets skill go below 0 under poison. My extra floor made my picture of the student differ from the real one. Same fix in <code>_land</code>, <code>SignedTask._skills_under</code> and the test.</p>
+</div>
+
+<!-- 8 -->
+<h2 id="limits"><span class="n">8</span>Honest limits</h2>
+<div class="card">
+  <ul>
+    <li>Start skill of 0.30 is a guess, not tuned.</li>
+    <li>Scores are a proxy on 4 banks. The real exam is a different distribution.</li>
+    <li>Poison detection needs several groups per question. One or two tries cannot judge.</li>
+    <li>No random exploration. Ties go by bank order. Repeatable, but not adaptive that way.</li>
+    <li><b>Next:</b> more banks and poison levels, learn the start skill from early results, deliberately test suspects.</li>
+    <li><b>Check before submitting:</b> <code>tasks/train.jsonl</code> and two notebooks show as modified in <code>git status</code>.</li>
+  </ul>
+</div>
+
+<p class="small muted">Full text version: <code>EXPLANATION.md</code>. Chat history: <code>conversations/</code>.</p>
+</main>
+
+<script>
+(function(){
+  var NS="http://www.w3.org/2000/svg";
+  function el(tag,attrs,parent,text){var e=document.createElementNS(NS,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;if(parent)parent.appendChild(e);return e;}
+  function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
+  var G="var(--green)",R="var(--red)",A="var(--amber)",B="var(--blue)",M="var(--muted)",L="var(--line)";
+
+  /* spread chart */
+  var k=document.getElementById("k"),kd=document.getElementById("kdots"),sc=document.getElementById("spreadchart"),kt=document.getElementById("ktext");
+  function drawSpread(){
+    var v=+k.value, spread=v*(8-v)/64;
+    clear(kd);
+    for(var i=0;i<8;i++){var d=document.createElement("span");d.className="dot "+(i<v?"p":"f");d.textContent=i<v?"✓":"✗";kd.appendChild(d);}
+    clear(sc);
+    var x0=40,w=460,y0=140,h=110;
+    el("line",{x1:x0,y1:y0,x2:x0+w,y2:y0,stroke:M},sc);
+    for(var j=0;j<=8;j++){
+      var s=j*(8-j)/64, bx=x0+j*(w/8)+6, bh=s/0.25*h;
+      el("rect",{x:bx,y:y0-bh,width:w/8-12,height:Math.max(bh,1),rx:4,fill:j===v?G:L},sc);
+      el("text",{x:bx+(w/8-12)/2,y:y0+16,"text-anchor":"middle","font-size":12},sc,j);
+    }
+    el("text",{x:x0+w/2,y:y0+34,"text-anchor":"middle","font-size":12,fill:M},sc,"passes out of 8 (k)");
+    el("text",{x:12,y:30,"font-size":11,fill:M},sc,"learning");
+    kt.textContent="k = "+v+" passes → spread = "+spread.toFixed(3)+". "+(v===0||v===8?"No learning at all.":v===4?"Maximum learning.":"Some learning.");
+  }
+  k.addEventListener("input",drawSpread);drawSpread();
+
+  /* s-curve */
+  var sk=document.getElementById("skill"),sg=document.getElementById("scurve"),st=document.getElementById("stext");
+  var OK=2.9444,SL=6,DEM=0.55;
+  function pp(s){return 1/(1+Math.exp(-(SL*(s-DEM)+OK)));}
+  function drawS(){
+    var s=+sk.value/100; clear(sg);
+    var x0=40,w=460,y0=150,h=120;
+    el("line",{x1:x0,y1:y0,x2:x0+w,y2:y0,stroke:M},sg);
+    el("line",{x1:x0,y1:y0-h,x2:x0,y2:y0,stroke:M},sg);
+    var pts=[];for(var i=0;i<=100;i++){var xs=i/100;pts.push((x0+xs*w)+","+(y0-pp(xs)*h));}
+    el("polyline",{points:pts.join(" "),fill:"none",stroke:B,"stroke-width":3},sg);
+    var dx=x0+DEM*w;
+    el("line",{x1:dx,y1:y0-h,x2:dx,y2:y0,stroke:A,"stroke-dasharray":"4 4"},sg);
+    el("text",{x:dx+4,y:y0-h+10,"font-size":11,fill:A},sg,"difficulty");
+    var cx=x0+s*w,cy=y0-pp(s)*h;
+    el("circle",{cx:cx,cy:cy,r:7,fill:G},sg);
+    el("text",{x:x0+w/2,y:y0+30,"text-anchor":"middle","font-size":12,fill:M},sg,"student skill →");
+    el("text",{x:8,y:y0-h+10,"font-size":11,fill:M},sg,"pass");
+    st.textContent="Skill "+s.toFixed(2)+" → pass chance "+Math.round(pp(s)*100)+"%. "+(pp(s)>0.9?"Too easy: all 8 will probably pass.":pp(s)<0.1?"Too hard: all 8 will probably fail.":"In the learning zone.");
+  }
+  sk.addEventListener("input",drawS);drawS();
+
+  /* baseline stacked bars */
+  var pc=document.getElementById("passchart");
+  var data=[[62,42,16],[63,34,23],[58,32,30],[56,28,36],[54,29,37],[50,30,40]];
+  var x0=50,y0=150,bw=60,gap=18,scale=1.0;
+  for(var i=0;i<data.length;i++){
+    var d=data[i],x=x0+i*(bw+gap),y=y0;
+    var cols=[G,R,A],names=["mixed","all fail","all pass"];
+    for(var j=0;j<3;j++){var hh=d[j]/120*120*scale;y-=hh;el("rect",{x:x,y:y,width:bw,height:hh,fill:cols[j]},pc);
+      el("text",{x:x+bw/2,y:y+hh/2+4,"text-anchor":"middle","font-size":11,fill:"#fff","font-weight":700},pc,d[j]);}
+    el("text",{x:x+bw/2,y:y0+16,"text-anchor":"middle","font-size":12},pc,"sweep "+(i+1));
+  }
+  var lx=18;[["mixed",G],["all fail",R],["all pass",A]].forEach(function(p){el("rect",{x:lx,y:176,width:12,height:12,fill:p[1]},pc);el("text",{x:lx+17,y:187,"font-size":12},pc,p[0]);lx+=90;});
+
+  /* posterior */
+  var po=document.getElementById("posterior");
+  function gauss(x,m,s){return Math.exp(-0.5*Math.pow((x-m)/s,2));}
+  var px0=30,pw=500,py0=130,ph=100,N=52;
+  el("line",{x1:px0,y1:py0,x2:px0+pw,y2:py0,stroke:M},po);
+  var g=[],b=[];for(var i=0;i<N;i++){var xs=i/(N-1);g.push((px0+xs*pw)+","+(py0-0.28*ph));b.push((px0+xs*pw)+","+(py0-gauss(xs,0.45,0.07)*ph));}
+  el("polyline",{points:g.join(" "),fill:"none",stroke:M,"stroke-width":3,"stroke-dasharray":"5 4"},po);
+  el("polyline",{points:b.join(" "),fill:"none",stroke:B,"stroke-width":3},po);
+  el("text",{x:px0+pw/2,y:py0+22,"text-anchor":"middle","font-size":12,fill:M},po,"possible difficulty (easy → hard)");
+  el("text",{x:px0+8,y:py0-0.28*ph-8,"font-size":11,fill:M},po,"before: anything possible");
+  el("text",{x:px0+0.45*pw+40,y:py0-ph+12,"font-size":11,fill:B},po,"after a few groups");
+
+  /* trend */
+  var tr=document.getElementById("trend");
+  var tx0=50,tw=470,ty0=165,th=130;
+  el("line",{x1:tx0,y1:ty0,x2:tx0+tw,y2:ty0,stroke:M},tr);
+  el("line",{x1:tx0,y1:ty0-th,x2:tx0,y2:ty0,stroke:M},tr);
+  var cp=[],pp2=[];for(var i=0;i<=10;i++){var xs=i/10;cp.push((tx0+xs*tw)+","+(ty0-(0.3+0.55*xs)*th));pp2.push((tx0+xs*tw)+","+(ty0-(0.55-0.4*xs)*th));}
+  el("polyline",{points:cp.join(" "),fill:"none",stroke:G,"stroke-width":3},tr);
+  el("polyline",{points:pp2.join(" "),fill:"none",stroke:R,"stroke-width":3},tr);
+  el("text",{x:tx0+tw-4,y:ty0-0.85*th-8,"text-anchor":"end","font-size":12,fill:G},tr,"clean: pass rate rises");
+  el("text",{x:tx0+tw-4,y:ty0-0.15*th+18,"text-anchor":"end","font-size":12,fill:R},tr,"poison: pass rate falls");
+  el("text",{x:tx0+tw/2,y:ty0+22,"text-anchor":"middle","font-size":12,fill:M},tr,"more training on this question →");
+  el("text",{x:8,y:ty0-th+8,"font-size":11,fill:M},tr,"pass");
+
+  /* score bars */
+  var sc2=document.getElementById("scores");
+  var rows=[["Part 1 · baseline",0.896,M],["Part 1 · mine",0.918,G],["Part 2 · baseline",0.806,M],["Part 2 · mine",0.904,G],["Part 2 worst · baseline",0.638,M],["Part 2 worst · mine",0.873,G]];
+  rows.forEach(function(r,i){
+    var row=document.createElement("div");row.className="bar-row";
+    row.innerHTML='<span class="small">'+r[0]+'</span><div class="bar"><i style="width:'+(r[1]*100)+'%;background:'+(r[2]===G?'var(--green)':'var(--muted)')+'"></i></div><b>'+r[1].toFixed(3)+'</b>';
+    sc2.appendChild(row);
+    if(i%2===1&&i<5){var hr=document.createElement("hr");hr.style.cssText="border:0;border-top:1px solid var(--line);margin:10px 0";sc2.appendChild(hr);}
+  });
+})();
+</script>
+</body>
+</html>

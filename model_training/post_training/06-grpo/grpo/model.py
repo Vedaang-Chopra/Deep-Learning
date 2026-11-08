@@ -3,14 +3,14 @@ from typing import Any, Sequence
 
 import torch
 
-from data import prepare_prompt_batch
-from grpo_loss import (
+from grpo.data import prepare_prompt_batch
+from grpo.grpo_loss import (
     completion_token_logprobs,
     compute_advantages,
     compute_ratio,
     grpo_policy_loss,
 )
-from verifier import compute_group_rewards
+from verifier import compute_group_rewards, classify_response
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,29 @@ def sample_group_completions(
     return output_ids, predictions, sequence_attention_mask
 
 
+
+def generate_rollouts(
+    model: torch.nn.Module,
+    tokenizer: Any,
+    examples: Sequence[dict[str, Any]],
+    group_size: int,
+    max_new_tokens: int,
+    temperature: float,
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, list[str], torch.Tensor]:
+    """Prepare prompts and generate grouped completions."""
+    
+    # Step 1: Get the input IDs and attention mask.
+    input_ids, attention_mask = prepare_prompt_batch(tokenizer, examples, device)
+
+    # Step 2: Generate the rollouts.
+    output_ids, predictions, sequence_mask = sample_group_completions(
+        model, tokenizer, input_ids, group_size, max_new_tokens, temperature, attention_mask
+    )
+
+    return input_ids, attention_mask, output_ids, predictions, sequence_mask
+
+
 def inspect_grpo_batch(
     model: torch.nn.Module,
     tokenizer: Any,
@@ -104,22 +127,26 @@ def inspect_grpo_batch(
     """
     logger.debug("Inspecting GRPO batch: examples=%s group_size=%s", len(examples), group_size)
 
-
-
-    ## Step-1: - Get the Input Ids and Attention Mask
-    input_ids, attention_mask = prepare_prompt_batch(tokenizer, examples, device)
-
-
-    ## Step-2: - Generate the rollouts
-    output_ids, predictions, sequence_mask = sample_group_completions(
-        model, tokenizer, input_ids, group_size, max_new_tokens, temperature, attention_mask
+    input_ids, attention_mask, output_ids, predictions, sequence_mask = generate_rollouts(
+        model=model,
+        tokenizer=tokenizer,
+        examples=examples,
+        group_size=group_size,
+        max_new_tokens=max_new_tokens,
+        temperature=temperature,
+        device=device,
     )
+
+    # Step 3: Generate rewards and advantages.
     rewards = compute_group_rewards(
         predictions, [example["answer"] for example in examples], group_size, device
     )
     advantages = compute_advantages(rewards)
     prompt_len = input_ids.shape[1]
 
+
+
+    ## Step-4: - Generate the probability of the computed tokens ? 
     with torch.no_grad():
         old_logits = model(output_ids, attention_mask=sequence_mask, use_cache=False).logits
         old_logps, mask = completion_token_logprobs(
@@ -127,6 +154,8 @@ def inspect_grpo_batch(
         )
     del old_logits
 
+
+    ## Step-5: - Compute log probability of new tokens ? 
     with torch.enable_grad():
         current_logits = model(output_ids, attention_mask=sequence_mask, use_cache=False).logits
         logits_shape = tuple(current_logits.shape)
@@ -146,6 +175,8 @@ def inspect_grpo_batch(
     advantages_cpu = advantages.detach().cpu()
     batch_loss = loss.detach().item()
     records = []
+    
+    
     for example_index, example in enumerate(examples):
         for completion_index in range(group_size):
             row = example_index * group_size + completion_index
@@ -157,6 +188,7 @@ def inspect_grpo_batch(
                 "completion_index": completion_index,
                 "prediction": predictions[row],
                 "reward": rewards_cpu[example_index, completion_index].item(),
+                "failure_reason": classify_response(predictions[row],example["answer"]),
                 "advantage": advantages_cpu[example_index, completion_index].item(),
                 "batch_loss": batch_loss,
                 "token_ids": output_cpu[row, 1:][token_mask].numpy().copy(),

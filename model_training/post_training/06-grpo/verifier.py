@@ -35,6 +35,19 @@ def extract_prediction(text: str) -> Decimal | None:
     return Decimal(match.group(1).replace(",", ""))
 
 
+def classify_response(prediction: str, gold_answer: str) -> str:
+    if not prediction.strip():
+        return "empty"
+
+    extracted = extract_prediction(prediction)
+
+    if extracted is None:
+        return "invalid_format"
+
+    if extracted != extract_gold_answer(gold_answer):
+        return "wrong_answer"
+
+    return "correct"
 
 
 def compute_reward(prediction: str, gold_answer: str) -> float:
@@ -43,10 +56,8 @@ def compute_reward(prediction: str, gold_answer: str) -> float:
         1.0: labeled answer is numerically correct
         0.0: incorrect or missing labeled answer
     """
-    if extract_prediction(prediction) == extract_gold_answer(gold_answer):
-        return 1.0
-    else:
-        return 0.0
+    status = classify_response(prediction, gold_answer)
+    return 1.0 if status == "correct" else 0.0
 
 def compute_group_rewards(
     predictions: Sequence[str],

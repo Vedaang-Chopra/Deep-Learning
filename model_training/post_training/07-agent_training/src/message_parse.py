@@ -1,8 +1,55 @@
 from collections.abc import Mapping, Sequence
+import json
+import logging
 from typing import Any
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+
+def detect_finish_call(messages: Any) -> bool | None:
+    """Detect a finish call in assistant messages; return None for incomplete input."""
+    logger.debug("detect_finish_call | messages_type=%s", type(messages).__name__)
+    if not isinstance(messages, (list, tuple, np.ndarray)):
+        logger.debug("detect_finish_call | finish_called=unknown")
+        return None
+
+    def find_call(value: Any) -> bool:
+        if isinstance(value, Mapping):
+            function = value.get("function")
+            if isinstance(function, Mapping) and function.get("name") == "finish":
+                return True
+            return any(
+                find_call(item)
+                for key, item in value.items()
+                if key not in {"function", "arguments"}
+            )
+        if isinstance(value, (list, tuple, np.ndarray)):
+            return any(find_call(item) for item in value)
+        return False
+
+    incomplete = False
+    for message in messages:
+        if not isinstance(message, Mapping):
+            incomplete = True
+            continue
+        if message.get("role") != "assistant":
+            continue
+        calls = message.get("tool_calls")
+        if calls is not None and not isinstance(calls, (Mapping, list, tuple, np.ndarray)):
+            incomplete = True
+        if find_call(calls):
+            logger.debug("detect_finish_call | finish_called=True")
+            return True
+        legacy_call = message.get("function_call")
+        if isinstance(legacy_call, Mapping) and legacy_call.get("name") == "finish":
+            logger.debug("detect_finish_call | finish_called=True")
+            return True
+    result = None if incomplete else False
+    logger.debug("detect_finish_call | finish_called=%s", result)
+    return result
 
 
 def prepare_message_df(
@@ -140,11 +187,65 @@ def attach_tool_responses(
     return result.sort_values("message_index", kind="stable").reset_index(drop=True)
 
 
+def enrich_tool_interactions(
+    interaction_df: pd.DataFrame,
+    tools: Sequence[Mapping[str, Any]] | np.ndarray | None = None,
+) -> pd.DataFrame:
+    """Expand call arguments and attach tool definitions by function name."""
+    logger.info("enrich_tool_interactions | input_rows=%d", len(interaction_df))
+    result = interaction_df.reset_index(drop=True).copy()
+    arguments = result.get("call_arguments", pd.Series([None] * len(result)))
+    argument_dicts = []
+    errors = []
+    for value in arguments:
+        error = None
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError as exc:
+                error = str(exc)
+                value = None
+        if isinstance(value, Mapping):
+            argument_dicts.append(dict(value))
+        else:
+            argument_dicts.append({})
+            if error is None and value is not None and value is not pd.NA:
+                if not (isinstance(value, (float, np.floating)) and np.isnan(value)):
+                    error = "Tool call arguments must be a JSON object."
+        errors.append(error)
+
+    argument_df = pd.json_normalize(argument_dicts).add_prefix("arg_")
+    result = result.join(argument_df)
+    result["argument_parse_error"] = errors
+    error_count = sum(error is not None for error in errors)
+    if error_count:
+        logger.warning("enrich_tool_interactions | argument_parse_errors=%d", error_count)
+
+    tool_list = [] if tools is None else list(tools)
+    definitions = pd.json_normalize(
+        [tool for tool in tool_list if isinstance(tool, Mapping)]
+    ).add_prefix("tool_definition_")
+    name_column = "tool_definition_function.name"
+    if name_column in definitions.columns and "call_name" in result.columns:
+        definitions = definitions[definitions[name_column].notna()]
+        result = result.merge(
+            definitions,
+            how="left",
+            left_on="call_name",
+            right_on=name_column,
+            sort=False,
+            validate="many_to_one",
+        )
+    logger.info("enrich_tool_interactions | output_rows=%d", len(result))
+    return result
+
+
 def build_tool_interactions(
     sample: Mapping[str, Any] | pd.Series,
     messages: Sequence[Mapping[str, Any]] | np.ndarray | None = None,
 ) -> pd.DataFrame:
-    """Run the three message parsing steps and return the combined DataFrame."""
+    """Run the message parsing steps and return the combined DataFrame."""
     message_df = prepare_message_df(sample, messages)
     tool_call_df = extract_tool_call_df(message_df)
-    return attach_tool_responses(message_df, tool_call_df)
+    interaction_df = attach_tool_responses(message_df, tool_call_df)
+    return enrich_tool_interactions(interaction_df, sample.get("tools"))

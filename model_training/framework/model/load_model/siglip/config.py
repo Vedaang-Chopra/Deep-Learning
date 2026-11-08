@@ -27,9 +27,6 @@ class SiglipVisionConfig:
     embd_dim:int = 768
     d_model:int = 768
     
-    
-    
-    
     intermediate_size: int = 3072
     num_hidden_layers: int = 12
     num_attention_heads: int = 12
