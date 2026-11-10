@@ -1,7 +1,25 @@
 
 import torch 
 import torch.nn as nn
-from torch.nn import functional as F
+
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+
+ForwardStep = Callable[[nn.Module, Any, torch.device | str], tuple[Any, ...]]
+LossStep = Callable[..., torch.Tensor]
+
+
+@dataclass
+class TrainComponents:
+    optimizer: torch.optim.Optimizer
+    dataloader: Any
+    scheduler: Callable[..., float]
+    forward_step: ForwardStep
+    loss_fn: LossStep
+
 
 import code
 import time
@@ -38,24 +56,17 @@ def train_model(model, train_components, train_config, logger=None):
         ### Step-2:- Load the data on Device
         loss_accum = 0.0 ## For keeping track of values 
         for micro_step in range(0,train_config.accumulation_steps):
-            x, y = train_components.dataloader.next_batch()
-            x= x.to(train_config.device)
-            y = y.to(train_config.device)
+
+            batch = train_components.dataloader.next_batch()
             
             ## Step-3a: - Do the Forward Pass
             device_type = torch.device(train_config.device).type
             precision = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(train_config.precision)
             with torch.autocast(device_type=device_type, dtype=precision, enabled=precision is not None):
-                model_output = model(x)
-                if hasattr(model_output, "logits"):
-                    logits = model_output.logits  # Hugging Face output
-                else:
-                    _, logits = model_output      # Local GPT returns (loss, logits)
-                loss = F.cross_entropy(
-                    logits.reshape(-1, logits.size(-1)),
-                    y.reshape(-1),
-                    ignore_index=-100,
+                forward_outputs = train_components.forward_step(
+                    model, batch, train_config.device
                 )
+                loss = train_components.loss_fn(*forward_outputs)
             
             ## Here since we do multiple forward backward, we need to do proper average over all steps. 
             loss = loss / train_config.accumulation_steps

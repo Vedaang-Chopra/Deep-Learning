@@ -1,0 +1,41 @@
+{
+  "os":  "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "python":  "CPython 3.13.5",
+  "startedAt":  "2026-11-09T05:39:14.629973Z",
+  "program":  "/Users/vedaangchopra/all_data/complete_technical_work/reference_and_learning_content/deep_learning/model_training/post_training/02-sft/01_instruct_tuning.ipynb",
+  "codePath":  "/Users/vedaangchopra/all_data/complete_technical_work/reference_and_learning_content/deep_learning/model_training/post_training/02-sft/01_instruct_tuning.ipynb",
+  "codePathLocal":  "01_instruct_tuning.ipynb",
+  "git":  {
+    "remote":  "https://github.com/Vedaang-Chopra/Deep-Learning.git",
+    "commit":  "712975fc6d07817b42965f37cdaca5c926d975af"
+  },
+  "email":  "vedaangchopra@hotmail.com",
+  "root":  "/Users/vedaangchopra/all_data/complete_technical_work/reference_and_learning_content/deep_learning/model_training/post_training/02-sft",
+  "host":  "ipsec-10-2-192-59.vpn.gatech.edu",
+  "executable":  "/opt/homebrew/Caskroom/miniconda/base/bin/python",
+  "cpu_count":  16,
+  "cpu_count_logical":  16,
+  "disk":  {
+    "/":  {
+      "total":  "994662584320",
+      "used":  "961324969984"
+    }
+  },
+  "memory":  {
+    "total":  "68719476736"
+  },
+  "cpu":  {
+    "model":  "Apple M4 Max"
+  },
+  "apple":  {
+    "name":  "Apple M4 Max",
+    "ecpuCores":  4,
+    "pcpuCores":  12,
+    "gpuCores":  40,
+    "memoryGb":  64,
+    "swapTotalBytes":  "24696061952",
+    "ramTotalBytes":  "68719476736",
+    "macModel":  "Mac16,6"
+  },
+  "writerId":  "01a1bed1-5e4c-78e5-8ef2-1cdbb855d33c"
+}
