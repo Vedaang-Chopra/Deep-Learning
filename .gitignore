@@ -12,3 +12,7 @@ datasets/
 **/.conda-pkgs/
 **/.tiktoken-cache/
 **/__pycache__/
+
+model_training/post_training/07-agent_training/mercor
+ml_system_design/
+
