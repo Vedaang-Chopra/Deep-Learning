@@ -1,3 +1,10 @@
+### Inference Time Scaling 
+'''
+Test Time Scaling. 
+More tokens more accuracy.
+'''
+
+
 import torch
 
 
@@ -10,6 +17,7 @@ def extract_loss_logits(model_output):
     if isinstance(model_output, dict):
         loss = model_output.get("loss", loss)
         logits = model_output.get("logits", logits)
+    
     elif torch.is_tensor(model_output):
         logits = model_output
     elif isinstance(model_output, (tuple, list)):
@@ -32,7 +40,6 @@ def extract_loss_logits(model_output):
 
 
 def generate_prob(token_input, context_len, model):
-    
     ## Cropping for context Length
     idx_cropped = token_input[:, -context_len:]
     with torch.no_grad():
