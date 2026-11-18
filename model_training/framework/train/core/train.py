@@ -27,7 +27,7 @@ import time
 
 
 
-def train_model(model, train_components, train_config, logger=None):
+def train_model(model, train_components, train_config, logger=None, accelerator: Any | None = None,):
     
     
     if train_config.accumulation_steps < 1:
@@ -38,16 +38,34 @@ def train_model(model, train_components, train_config, logger=None):
     print(f"Model set to Training mode:{model.training}")
     
     if train_config.use_compile:
-        model = model.to(train_config.device)    
         model = torch.compile(model)
+    
+    
+    if accelerator is None:
+        device = torch.device(train_config.device)
+        model = model.to(device)
+        optimizer = train_components.optimizer
+        next_batch = train_components.dataloader.next_batch
     else:
-        model = model.to(train_config.device)    
+        base_loader = train_components.dataloader.loader
+        model, optimizer, prepared_loader = accelerator.prepare(model,train_components.optimizer,base_loader)
+        device = accelerator.device
+        batch_iterator = iter(prepared_loader)
+        def next_batch():
+            nonlocal batch_iterator
+            try:
+                return next(batch_iterator)
+            except StopIteration:
+                batch_iterator = iter(prepared_loader)
+                return next(batch_iterator)
+    model.train()
+    
     
     for step in range(0,(train_config.num_steps)):
         
         start_time=time.time()
         ### Step-1: - Zero the Gradients in Training 
-        train_components.optimizer.zero_grad()
+        optimizer.zero_grad()
         
         ### Adding Gradient Accumulation -> Due to GPU limits, we can't fit all data in one GPU, so we do multiple forward and backward and then do one update after some data is processed. 
         ## Some data is batch size, so in One Batch -> Do multiple forward and backward pass and then do one update. We want Batch Size to be High, but due to GPU limit we can't do that
@@ -57,16 +75,31 @@ def train_model(model, train_components, train_config, logger=None):
         loss_accum = 0.0 ## For keeping track of values 
         for micro_step in range(0,train_config.accumulation_steps):
 
-            batch = train_components.dataloader.next_batch()
+            # batch = train_components.dataloader.next_batch()
+            batch = next_batch()
             
             ## Step-3a: - Do the Forward Pass
             device_type = torch.device(train_config.device).type
             precision = {"bf16": torch.bfloat16, "fp16": torch.float16}.get(train_config.precision)
-            with torch.autocast(device_type=device_type, dtype=precision, enabled=precision is not None):
-                forward_outputs = train_components.forward_step(
-                    model, batch, train_config.device
-                )
+            if accelerator is None:
+                device_type = device.type
+                precision = {"bf16": torch.bfloat16, "fp16": torch.float16,}.get(train_config.precision)
+                
+                autocast_context = torch.autocast(device_type=device_type,dtype=precision,enabled=precision is not None)
+            else:
+                autocast_context = accelerator.autocast()
+            
+            
+            with autocast_context:
+                forward_outputs = train_components.forward_step(model, batch, device)
                 loss = train_components.loss_fn(*forward_outputs)
+
+            # with torch.autocast(device_type=device_type, dtype=precision, enabled=precision is not None):
+            #     forward_outputs = train_components.forward_step(
+            #         model, batch, train_config.device
+            #     )
+            #     loss = train_components.loss_fn(*forward_outputs)
+            
             
             ## Here since we do multiple forward backward, we need to do proper average over all steps. 
             loss = loss / train_config.accumulation_steps
@@ -74,11 +107,17 @@ def train_model(model, train_components, train_config, logger=None):
             
             
             ## Step-3b: - Send the Loss backward
-            loss.backward()
+            if accelerator is None:
+                loss.backward()
+            else:
+                accelerator.backward(loss)
         
         
         ## Gradient Clipping; to handle the shock for bad batches. Handles instability, so that model weight updates are not very high
-        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        if accelerator is None:
+            norm = torch.nn.utils.clip_grad_norm_(model.parameters(),train_config.grad_clip)
+        else:
+            norm = accelerator.clip_grad_norm_(model.parameters(),train_config.grad_clip)
         
         # Setup LR with Scheduler
         lr = train_components.scheduler(step=step,  
@@ -87,11 +126,11 @@ def train_model(model, train_components, train_config, logger=None):
                                                 peak_lr=train_config.max_lr,
                                                 min_lr= train_config.min_lr)
         
-        for param_group in train_components.optimizer.param_groups:
+        for param_group in optimizer.param_groups:
             param_group['lr'] = lr
         
         ### Step-4: - Update the weights -> With weight Decay
-        train_components.optimizer.step() 
+        optimizer.step()
         
         
         if torch.device(train_config.device).type == "cuda":
@@ -103,22 +142,37 @@ def train_model(model, train_components, train_config, logger=None):
         
         tokens_per_second = (train_components.dataloader.batch_size * train_config.seq_length * train_config.accumulation_steps) / (end_time-start_time)
         
-        print(f"""step { step } | loss: {loss_accum.item():.6f} | norm :{norm:.2f} | dt: {dt:.2f} ms | tok/sec:{tokens_per_second:.2f}""")
+        if accelerator is None:
+            display_loss = loss_accum
+            is_main_process = True
+        else:
+            display_loss = accelerator.reduce(loss_accum, reduction="mean")
+            is_main_process = accelerator.is_main_process
+        if is_main_process:
+            print(
+                    f"step {step} | loss: {display_loss.item():.6f} | "
+                    f"norm: {norm.item():.2f} | dt: {dt:.2f} ms | "
+                    f"tok/sec:{tokens_per_second:.2f}"
+                )
         
-        # Log the details
-        # train_config.log()
-        if logger is not None:
-            logger.log(
-        {
-            "train/loss": loss_accum.item(),
-            "train/grad_norm": norm.item(),
-            "train/lr": lr,
-            "train/tokens_per_sec": tokens_per_second,
-            "train/step_ms": dt,
-        },
-        step=step,
-    )
-    return model
+            # Log the details
+            # train_config.log()
+            if logger is not None:
+                logger.log(
+            {
+                "train/loss": display_loss.item(),
+                "train/grad_norm": norm.item(),
+                "train/lr": lr,
+                "train/tokens_per_sec": tokens_per_second,
+                "train/step_ms": dt,
+            },
+            step=step,
+            )
+    
+    if accelerator is None:
+        return model
+    else:
+        return accelerator.unwrap_model(model)
 
 
 # import torch 
@@ -133,73 +187,73 @@ def train_model(model, train_components, train_config, logger=None):
 
 # def train_model(model, train_components, train_config):
     
-    print(f"Current Device: {train_config.device}")
-    model.train()
-    print(f"Model set to Training mode:{model.training}")
+#     print(f"Current Device: {train_config.device}")
+#     model.train()
+#     print(f"Model set to Training mode:{model.training}")
     
-    if train_config.use_compile:
-        model = model.to(train_config.device)    
-        model = torch.compile(model)
-    else:
-        model = model.to(train_config.device)    
+#     if train_config.use_compile:
+#         model = model.to(train_config.device)    
+#         model = torch.compile(model)
+#     else:
+#         model = model.to(train_config.device)    
     
-    for step in range(0,(train_config.num_steps)):
+#     for step in range(0,(train_config.num_steps)):
         
-        start_time=time.time()
-        ### Step-1: - Zero the Gradients in Training 
-        train_components.optimizer.zero_grad()
+#         start_time=time.time()
+#         ### Step-1: - Zero the Gradients in Training 
+#         train_components.optimizer.zero_grad()
         
-        ### Adding Gradient Accumulation -> Due to GPU limits, we can't fit all data in one GPU, so we do multiple forward and backward and then do weight update after some data is processed. 
-        ## Some data is batch size, so in One Batch -> Do multiple forward and backward pass and then do one update. We want Batch Size to be High, but due to GPU limit we can't do that
+#         ### Adding Gradient Accumulation -> Due to GPU limits, we can't fit all data in one GPU, so we do multiple forward and backward and then do weight update after some data is processed. 
+#         ## Some data is batch size, so in One Batch -> Do multiple forward and backward pass and then do one update. We want Batch Size to be High, but due to GPU limit we can't do that
         
         
-        ### Step-2:- Load the data on Device
-        loss_accum = 0.0 ## For keeping track of values 
-        for micro_step in range(0,train_config.accumulation_steps):
-            x, y = train_components.dataloader.next_batch()
-            x= x.to(train_config.device)
-            y = y.to(train_config.device)
+#         ### Step-2:- Load the data on Device
+#         loss_accum = 0.0 ## For keeping track of values 
+#         for micro_step in range(0,train_config.accumulation_steps):
+#             x, y = train_components.dataloader.next_batch()
+#             x= x.to(train_config.device)
+#             y = y.to(train_config.device)
             
-            ## Step-3a: - Do the Forward Pass
-            with torch.autocast(device_type= train_config.device, dtype=torch.bfloat16):
-                loss , logits= model(x, y)
-                # code.interact(local=locals())
+#             ## Step-3a: - Do the Forward Pass
+#             with torch.autocast(device_type= train_config.device, dtype=torch.bfloat16):
+#                 loss , logits= model(x, y)
+#                 # code.interact(local=locals())
             
-            ## Here since we do multiple forward backward, we need to do proper average over all steps. 
-            loss = loss / train_config.accumulation_steps
-            loss_accum += loss.detach()
+#             ## Here since we do multiple forward backward, we need to do proper average over all steps. 
+#             loss = loss / train_config.accumulation_steps
+#             loss_accum += loss.detach()
             
-            ## Step-3b: - Send the Loss backward
-            loss.backward()
+#             ## Step-3b: - Send the Loss backward
+#             loss.backward()
         
         
-        ## Gradient Clipping; to handle the shock for bad batches. Handles instability, so that model weight updates are not very high
-        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+#         ## Gradient Clipping; to handle the shock for bad batches. Handles instability, so that model weight updates are not very high
+#         norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         
-        # Setup LR with Scheduler
-        lr = train_components.scheduler(step=step,  
-                                                total_steps=train_config.num_steps,
-                                                warmup_steps= train_config.warmup_steps,
-                                                peak_lr=train_config.max_lr,
-                                                min_lr= train_config.min_lr)
+#         # Setup LR with Scheduler
+#         lr = train_components.scheduler(step=step,  
+#                                                 total_steps=train_config.num_steps,
+#                                                 warmup_steps= train_config.warmup_steps,
+#                                                 peak_lr=train_config.max_lr,
+#                                                 min_lr= train_config.min_lr)
         
-        for param_group in train_components.optimizer.param_groups:
-            param_group['lr'] = lr
+#         for param_group in train_components.optimizer.param_groups:
+#             param_group['lr'] = lr
         
-        ### Step-4: - Update the weights -> With weight Decay
-        train_components.optimizer.step() 
-        
-        
-        torch.cuda.synchronize() ### Wait for it to finish a batch
+#         ### Step-4: - Update the weights -> With weight Decay
+#         train_components.optimizer.step() 
         
         
-        end_time = time.time()
-        dt = (end_time-start_time)*1000
+#         torch.cuda.synchronize() ### Wait for it to finish a batch
         
-        tokens_per_second = (train_components.dataloader.batch_size * train_components.dataloader.seq_len * train_config.accumulation_steps) / (end_time-start_time)
         
-        print(f"""step { step } | loss: {loss_accum.item():.6f} | norm :{norm:.2f} | dt: {dt:.2f} ms | tok/sec:{tokens_per_second:.2f}""")
+#         end_time = time.time()
+#         dt = (end_time-start_time)*1000
         
-        # Log the details
-        # train_config.log()
-    return model
+#         tokens_per_second = (train_components.dataloader.batch_size * train_components.dataloader.seq_len * train_config.accumulation_steps) / (end_time-start_time)
+        
+#         print(f"""step { step } | loss: {loss_accum.item():.6f} | norm :{norm:.2f} | dt: {dt:.2f} ms | tok/sec:{tokens_per_second:.2f}""")
+        
+#         # Log the details
+#         # train_config.log()
+#     return model

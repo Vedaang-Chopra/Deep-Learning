@@ -2,9 +2,14 @@
 from functools import partial
 from torch.utils.data import DataLoader
 
+from datasets import Dataset as hf_data
+from model_training.framework.data.post_train.instruction_tuning.raw_data.simple_example.instruct_data import download_and_load_file
+from model_training.framework.data.post_train.instruction_tuning.prompt_style.styles import SFTDatasetPrepare, AlpacaFormatOld
+from model_training.framework.data.post_train.dataloader import InstructionDataset, custom_collate_fn, create_instruction_dataloader
 
 
-def data_prepare(data_dir, file_name, url):
+
+def data_prepare(data_dir, file_name, url, MODEL_NAME):
     data = download_and_load_file(data_dir=(data_dir / "instruction_tuning"), file_name=file_name, url = url)
     print("Number of entries:", len(data))
     
@@ -15,7 +20,7 @@ def data_prepare(data_dir, file_name, url):
     return sft_data, prepared
 
 
-def data_split(prepared, train_portion, test_portion)
+def data_split(sft_data, prepared, train_portion, test_portion, tokenizer):
     
     train_data = prepared.select(range(train_portion))
     test_data = prepared.select(
@@ -91,10 +96,10 @@ def prepare_dataloader(train_dataset,
     return train_loader, val_loader, test_loader
     
 
-def return_dataset(data_dir, file_name, url):
-    sft_data, prepared = data_prepare(data_dir, file_name, url)
+def return_dataset(MODEL_NAME, data_dir, file_name, url, tokenizer, train_portion, test_portion, pad_token_id, num_workers, batch_size, device):
+    sft_data, prepared = data_prepare(data_dir, file_name, url, MODEL_NAME)
     
-    train_dataset, val_dataset, test_dataset= data_split(prepared, train_portion, test_portion)
+    train_dataset, val_dataset, test_dataset= data_split(sft_data, prepared, train_portion, test_portion, tokenizer)
 
     train_loader, val_loader, test_loader= prepare_dataloader(train_dataset, 
                     val_dataset,
